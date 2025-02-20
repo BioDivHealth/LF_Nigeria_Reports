@@ -1,1 +1,50 @@
-#test test
+# Lassa Reports Scraping
+
+This repository contains tools and scripts for scraping, processing, and analyzing Lassa fever situation reports.
+
+## Repository Structure
+
+- **config/**  
+  Configuration files and settings used across the project.
+
+- **data/**  
+  - **2021/**, **2022/**, **2023/**, **2024/**  
+    PDFs and raw report data organized by year.
+  - **documentation/**  
+    Additional documentation related to the dataset and its processing.
+  - **processed/**  
+    Data that has been processed and is ready for analysis.
+  - **raw/**  
+    The original unprocessed data.
+
+- **Lassa_Reports_Scraping.code-workspace**  
+  Workspace settings file for Visual Studio Code.
+
+- **misc/**  
+  Miscellaneous resources:
+  - **clean/**  
+    Cleaned data files or temporary processing outputs.
+  - **debug_green_mask.png**, **debug_green_overlay.png**  
+    Debug images used during development.
+  - **downloaded/**  
+    Folder for downloaded PDFs or intermediary files.
+  - **PDFs/**, **PDFs_Lines_Test/**  
+    PDF files and test images.
+  - **Process.png**, **W1_Lines_1.png**  
+    Visual aids and process diagrams.
+
+- **notebooks/**  
+  Jupyter notebooks, including:
+  - [Demo2.ipynb](./notebooks/Demo2.ipynb) – A notebook demonstrating image processing, text extraction, table detection, and usage of Google Vision and Gemini models.
+
+- **reports/**  
+  Additional analysis reports and documentation.
+
+- **src/**  
+  Source code scripts:
+  - [LF_All_by_date.py](./src/LF_All_by_date.py) – Script to list or process reports grouped by date.
+  - [LF_Downloading.py](./src/LF_Downloading.py) – Script dedicated to downloading new Lassa reports.
+  - [LF_Latest_by_date.py](./src/LF_Latest_by_date.py) – Script to process the most recent report.
+  - [ReportAnalysis.py](./src/ReportAnalysis.py) – Tool for analyzing report images for text and table data.
+  - [TableEnhancement.py](./src/TableEnhancement.py) – Script to enhance and clean extracted table data.
+  - [TableExtractionSorting.py](./src/TableExtractionSorting.py) – Script to extract and sort table data from reports.
