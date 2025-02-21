@@ -17,6 +17,7 @@ BASE_DIR = Path(__file__).parent.parent
 CSV_FILE = BASE_DIR / 'data' / 'documentation' / 'website_raw_data.csv'
 FIELDNAMES = ['year','week','month', 'name', 'download_name','new_name', 'link', 'Broken_Link', 'Downloaded', 'Compatible', 'Recovered', 'Processed']
 
+
 # Website 
 base_url = "https://ncdc.gov.ng"
 list_page_url = f"{base_url}/diseases/sitreps/?cat=5&name=An%20update%20of%20Lassa%20fever%20outbreak%20in%20Nigeria"
@@ -99,6 +100,7 @@ def save_raw_website_data(soup):
     logging.info(f"Saved raw website data to {raw_data_file}")
 
 
+
 def process_file_status_update():
     """
     Process file_status.csv and update website_raw_data.csv accordingly.
@@ -146,14 +148,23 @@ def process_file_status_update():
         fs_year = fs.get('Year', '').strip()
         fs_week = fs.get('Week', '').strip()
         fs_year_last2 = fs_year[-2:] if len(fs_year) >= 2 else fs_year
-        
-        if note == 'wrong_link':
+        fs_old_name = fs.get('old_name', '').strip()
+        fs_new_name = fs.get('new_name', '').strip()
+        fs_correct_link = fs.get('correct_link', '').strip()
+
+        if note == 'wrong_link' and status == 'Found':
             for row in website_rows:
                 row_year = row.get('year', '').strip()
                 row_week = row.get('week', '').strip()
-                if row_year == fs_year_last2 and row_week == fs_week:
+                row_download_name = row.get('download_name', '').strip()
+
+                if row_year == fs_year_last2 and row_week == fs_week or (row_download_name == fs_old_name): # This should take care of 2022/2023 instance of Week 53 isntead of W1
+                    row['new_name'] = fs_new_name
                     row['Broken_Link'] = 'Y'
                     row['Recovered'] = 'Y'
+                    row['year'] = fs_year_last2
+                    row['week'] = fs_week
+                    row['link'] = fs_correct_link
         elif note == 'missing_row':
             exists = any(row.get('year', '').strip() == fs_year_last2 and row.get('week', '').strip() == fs_week for row in website_rows)
             if not exists:
