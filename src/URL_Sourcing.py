@@ -53,53 +53,77 @@ def rename_lassa_file(old_name):
     }
 
 def save_raw_website_data(soup):
-    """Save raw website table data to a CSV file."""
+    """Save raw website table data to a CSV file.
+       - If file exists, append only rows whose combination of year and week is not present.
+       - If file does not exist, write header and all rows.
+    """
     raw_data_file = CSV_FILE
     raw_fieldnames = FIELDNAMES
-    
+
     table_body = soup.find("tbody")
     if not table_body:
         logging.error("Could not find <tbody> on the page.")
         return
-    
+
     rows = table_body.find_all("tr")
     if not rows:
         logging.error("No table rows found in <tbody>.")
         return
-    
-    with open(raw_data_file, 'w', newline='') as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=raw_fieldnames)
-        writer.writeheader()
-        
-        for row in rows:
-            cells = row.find_all('td')
-            if len(cells) >= 3:  # Ensure we have enough cells
-                name_cell = cells[1].get_text(strip=True)
-                link_tag = cells[2].find('a', href=True)
-                if link_tag:
-                    href = link_tag.get('href', '')
-                    if href.startswith('/'):
-                        href = f"https://ncdc.gov.ng{href}"
-                    download_name = link_tag.get('download', '')
-                    download_name = download_name.replace(" ", "_")
-                    new_name = rename_lassa_file(download_name)
-                    writer.writerow({
-                        'year': new_name.get('year', ''),
-                        'week': new_name.get('week', ''),
-                        'month': new_name.get('month', ''),
-                        'name': name_cell,
-                        'download_name': download_name,
-                        'new_name': new_name.get('full_name', download_name),
-                        'link': href,
-                        'Downloaded': '',
-                        'Compatible': '',
-                        'Recovered': '',
-                        'Processed': ''
-                    })
-    
-    logging.info(f"Saved raw website data to {raw_data_file}")
 
+    new_rows = []
+    for row in rows:
+        cells = row.find_all('td')
+        if len(cells) >= 3:
+            name_cell = cells[1].get_text(strip=True)
+            link_tag = cells[2].find('a', href=True)
+            if link_tag:
+                href = link_tag.get('href', '')
+                if href.startswith('/'):
+                    href = f"https://ncdc.gov.ng{href}"
+                download_name = link_tag.get('download', '')
+                download_name = download_name.replace(" ", "_")
+                new_name = rename_lassa_file(download_name)
+                new_rows.append({
+                    'year': new_name.get('year', ''),
+                    'week': new_name.get('week', ''),
+                    'month': new_name.get('month', ''),
+                    'name': name_cell,
+                    'download_name': download_name,
+                    'new_name': new_name.get('full_name', download_name),
+                    'link': href,
+                    'Broken_Link': '',
+                    'Downloaded': '',
+                    'Compatible': '',
+                    'Recovered': '',
+                    'Processed': ''
+                })
 
+    if raw_data_file.exists():
+        existing_combinations = set()
+        existing_download_names = set()
+        with open(raw_data_file, 'r', newline='') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for existing_row in reader:
+                existing_combinations.add((existing_row.get('year', '').strip(), existing_row.get('week', '').strip()))
+                existing_download_names.add(existing_row.get('download_name', '').strip())
+        rows_to_append = [
+            row for row in new_rows
+            if (row.get('year', '').strip(), row.get('week', '').strip()) not in existing_combinations 
+               and row.get('download_name', '').strip() not in existing_download_names
+        ]
+        if rows_to_append:
+            with open(raw_data_file, 'a', newline='') as csvfile:
+                writer = csv.DictWriter(csvfile, fieldnames=raw_fieldnames)
+                writer.writerows(rows_to_append)
+            logging.info(f"Appended {len(rows_to_append)} new rows to {raw_data_file}")
+        else:
+            logging.info("No new records to append.")
+    else:
+        with open(raw_data_file, 'w', newline='') as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=raw_fieldnames)
+            writer.writeheader()
+            writer.writerows(new_rows)
+        logging.info(f"Created file and saved raw website data to {raw_data_file}")
 
 def process_file_status_update():
     """
@@ -190,6 +214,14 @@ def process_file_status_update():
                     row['Broken_Link'] = 'Y'
                     row['Recovered'] = 'N'
 
+    # New code: update 'Downloaded' field based on files available in the downloaded folder
+    downloaded_dir = BASE_DIR / 'data' / 'raw' / 'downloaded'
+    if downloaded_dir.exists():
+        downloaded_files = {f.name for f in downloaded_dir.iterdir() if f.is_file()}
+        for row in website_rows:
+            if row.get('download_name', '').strip() in downloaded_files:
+                row['Downloaded'] = 'Y'
+
     # Write the updated website_raw_data.csv
     try:
         with open(website_data_path, 'w', newline='') as ws_file:
@@ -202,7 +234,7 @@ def process_file_status_update():
 
 
 def main():
-   save_raw_website_data(soup)
+    save_raw_website_data(soup)
 
 if __name__ == "__main__":
     main()

@@ -27,13 +27,6 @@ def get_fieldnames():
 
 FIELDNAMES = get_fieldnames()
 
-def load_csv_records(csv_path, fieldnames):
-    if not os.path.exists(csv_path):
-        ensure_csv(csv_path, fieldnames)
-        return []
-    with open(csv_path, 'r', newline='') as csvfile:
-        return list(csv.DictReader(csvfile))
-
 def download_pdf(pdf_url, download_path):
     logging.info(f"Downloading {pdf_url} -> {download_path.name}")
     try:
@@ -115,10 +108,10 @@ def organize_pdfs_by_year():
                 year_folder = DEST_FOLDER / year
                 year_folder.mkdir(parents=True, exist_ok=True)
                 dest_file = year_folder / file_name_new
-                if src_file.exists():
+                if src_file.exists() and not dest_file.exists():
                     shutil.copy(src_file, dest_file)
                     print(f"Copied {file_name_old} to {year_folder}")
-                else:
+                elif not src_file.exists():
                     print(f"Source file does not exist: {src_file}")
             else:
                 print("No download_name provided for row:", row)
