@@ -132,7 +132,7 @@ def enhance_table_lines_from_pdf_hq(
 
     # 5. Draw vertical lines on the image -------------------------------------
     for x1, y1, x2, y2 in vertical_lines:
-        cv2.line(img, (x1, top_boundary-180), (x2, bottom_boundary+95), (100, 100, 100), 2)
+        cv2.line(img, (x1, top_boundary-180), (x2, bottom_boundary+10), (100, 100, 100), 2)
 
     # 6. Also detect horizontal lines in the table_region
     lines_h = cv2.HoughLinesP(
@@ -164,7 +164,7 @@ def enhance_table_lines_from_pdf_hq(
     #cv2.line(img, (0, bottom_boundary), (width, bottom_boundary), (0, 255, 0), 2)
 
     # Crop the image so that it ends at bottom_boundary + 40
-    crop_bottom = bottom_boundary + 130
+    crop_bottom = bottom_boundary + 20 #was +130, lets chanhe to just + 20?
     crop_bottom = min(crop_bottom, img.shape[0])
     crop_top = top_boundary - 360
     new_width = int(img.shape[1] * 0.59)  # keep left 58% of the image
@@ -177,17 +177,17 @@ def enhance_table_lines_from_pdf_hq(
 
     #print(f"Saved enhanced table to: {output_path}")
 
-all_pdfs = [f for f in os.listdir("2021/PDFs_2021") if f.endswith(".pdf")]
-pdfs_2021 = [f for f in all_pdfs if "_21_W" in f]
+all_pdfs = [f for f in os.listdir("data/raw/year/25") if f.endswith(".pdf")]
+pdfs_2025 = [f for f in all_pdfs if "_25_W" in f]
 
-sorted_pdfs = sorted(pdfs_2021, key=lambda x: int(re.search(r'_W(\d+)\.pdf$', x).group(1)))
+sorted_pdfs = sorted(pdfs_2025, key=lambda x: int(re.search(r'_W(\d+)\.pdf$', x).group(1)))
 
 # Limit to the top 3 sorted PDFs if needed
-sorted_pdfs = sorted_pdfs[38:40]
+# sorted_pdfs = sorted_pdfs[38:40]
 
 for pdf in sorted_pdfs:
-    input_pdf = os.path.join("2021/PDFs_2021", pdf)
-    output_img = os.path.join("2021/PDFs_Lines_2021", f"Lines_{pdf.replace('.pdf','')}_page3.png")
+    input_pdf = os.path.join("data/raw/year/25", pdf)
+    output_img = os.path.join("data/processed/PDFs_Lines_2025", f"Lines_{pdf.replace('.pdf','')}_page3.png")
     enhance_table_lines_from_pdf_hq(input_pdf,
                                     output_img,
                                     h1=40, s1=0, v1=210,
