@@ -132,7 +132,7 @@ def enhance_table_lines_from_pdf_hq(
 
     # 5. Draw vertical lines on the image -------------------------------------
     for x1, y1, x2, y2 in vertical_lines:
-        cv2.line(img, (x1, top_boundary-180), (x2, bottom_boundary+10), (100, 100, 100), 2)
+        cv2.line(img, (x1, top_boundary-110), (x2, bottom_boundary+10), (100, 100, 100), 2)
 
     # 6. Also detect horizontal lines in the table_region
     lines_h = cv2.HoughLinesP(
@@ -177,17 +177,17 @@ def enhance_table_lines_from_pdf_hq(
 
     #print(f"Saved enhanced table to: {output_path}")
 
-all_pdfs = [f for f in os.listdir("data/raw/year/25") if f.endswith(".pdf")]
-pdfs_2025 = [f for f in all_pdfs if "_25_W" in f]
+all_pdfs = [f for f in os.listdir("data/raw/year/23") if f.endswith(".pdf")]
+pdfs_2023 = [f for f in all_pdfs if "_23_W" in f]
 
-sorted_pdfs = sorted(pdfs_2025, key=lambda x: int(re.search(r'_W(\d+)\.pdf$', x).group(1)))
-
+sorted_pdfs = sorted(pdfs_2023, key=lambda x: int(re.search(r'_W(\d+)\.pdf$', x).group(1)))
+    
 # Limit to the top 3 sorted PDFs if needed
 # sorted_pdfs = sorted_pdfs[38:40]
 
 for pdf in sorted_pdfs:
-    input_pdf = os.path.join("data/raw/year/25", pdf)
-    output_img = os.path.join("data/processed/PDFs_Lines_2025", f"Lines_{pdf.replace('.pdf','')}_page3.png")
+    input_pdf = os.path.join("data/raw/year/23", pdf)
+    output_img = os.path.join("data/processed/PDFs_Lines_2023", f"Lines_{pdf.replace('.pdf','')}_page3.png")
     enhance_table_lines_from_pdf_hq(input_pdf,
                                     output_img,
                                     h1=40, s1=0, v1=210,

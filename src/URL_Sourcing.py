@@ -1,4 +1,31 @@
 #!/usr/bin/env python3
+"""
+URL_Sourcing.py: Nigeria Lassa Fever Report URL Scraper and Metadata Manager
+
+This script scrapes the Nigeria Centre for Disease Control (NCDC) website for 
+Lassa fever outbreak reports, extracts metadata, and manages file status information.
+
+The script:
+1. Scrapes the NCDC website for Lassa fever reports
+2. Standardizes file naming conventions
+3. Extracts and organizes metadata (year, week, etc.) from report names
+4. Updates a central CSV database of report information
+5. Cross-references with file_status.csv to manage broken links, missing files, etc.
+6. Tracks download status and file compatibility
+
+Usage:
+    python URL_Sourcing.py
+
+Output:
+    - Updates website_raw_data.csv with report metadata
+    - Logs processing status and errors
+
+Dependencies:
+    - requests: For HTTP requests
+    - BeautifulSoup4: For HTML parsing
+    - pathlib: For file path management
+    - csv: For CSV file operations
+"""
 import os
 import re
 import csv
@@ -9,14 +36,16 @@ from datetime import datetime
 from pathlib import Path
 from bs4 import BeautifulSoup, Comment
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
-
 # Define base paths and constants
 BASE_DIR = Path(__file__).parent.parent
 CSV_FILE = BASE_DIR / 'data' / 'documentation' / 'website_raw_data.csv'
 FIELDNAMES = ['year','week','month', 'name', 'download_name','new_name', 'link', 'Broken_Link', 'Downloaded', 'Compatible', 'Recovered', 'Processed']
 
+# Create directories if they don't exist
+documentation_dir = BASE_DIR / 'data' / 'documentation'
+downloaded_dir = BASE_DIR / 'data' / 'raw' / 'downloaded'
+documentation_dir.mkdir(parents=True, exist_ok=True)
+downloaded_dir.mkdir(parents=True, exist_ok=True)
 
 # Website 
 base_url = "https://ncdc.gov.ng"
@@ -25,8 +54,36 @@ logging.info(f"Fetching list page: {list_page_url}")
 response = requests.get(list_page_url)
 response.raise_for_status()
 soup = BeautifulSoup(response.text, "html.parser")
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s', handlers=[NewlineLoggingHandler()])
+
+class NewlineLoggingHandler(logging.StreamHandler):
+    """Custom logging handler that adds a newline after each log entry."""
+    def emit(self, record):
+        super().emit(record)
+        self.stream.write('\n')
+        self.flush()
+
+def process_file_status_update():
+    """
+    Standardize Lassa fever report filenames and extract metadata.
     
-def rename_lassa_file(old_name):
+    Takes original filenames from the NCDC website and converts them to a standardized format:
+    Nigeria_DD_MMM_YY_WXX.pdf (e.g., Nigeria_01_Jan_22_W01.pdf)
+    
+    Args:
+        old_name (str): Original filename from the NCDC website
+        
+    Returns:
+        dict: Contains standardized filename and extracted metadata:
+            - full_name: The standardized filename
+            - month_name: Three-letter month abbreviation (Jan, Feb, etc.)
+            - year: Two-digit year
+            - month: Two-digit month number
+            - week: Week number
+            - day: Two-digit day of month
+    """
     month_map = {
         "01": "Jan", "02": "Feb", "03": "Mar", "04": "Apr",
         "05": "May", "06": "Jun", "07": "Jul", "08": "Aug",
@@ -53,9 +110,18 @@ def rename_lassa_file(old_name):
     }
 
 def save_raw_website_data(soup):
-    """Save raw website table data to a CSV file.
-       - If file exists, append only rows whose combination of year and week is not present.
-       - If file does not exist, write header and all rows.
+    """
+    Extract Lassa fever report data from the NCDC website and save to CSV.
+    
+    Parses the HTML table from the NCDC situation reports page, extracts relevant
+    metadata about each report, and saves it to website_raw_data.csv. Handles both
+    creating a new CSV file and updating an existing one with new records.
+    
+    Args:
+        soup (BeautifulSoup): BeautifulSoup object containing the parsed HTML from the NCDC website
+        
+    Returns:
+        None: Results are written to the CSV_FILE and logged
     """
     raw_data_file = CSV_FILE
     raw_fieldnames = FIELDNAMES
@@ -234,6 +300,12 @@ def process_file_status_update():
 
 
 def main():
+    """
+    Main entry point for the script.
+    
+    Executes the process to save raw website data by scraping the NCDC website.
+    The scraping process extracts Lassa fever report data and saves it to CSV.
+    """
     save_raw_website_data(soup)
 
 if __name__ == "__main__":
