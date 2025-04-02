@@ -23,6 +23,16 @@ logging.basicConfig(
     handlers=[NewlineLoggingHandler()]
 )
 
+# Suppress specific warnings and logs from the Google GenAI library
+logging.getLogger("google.genai").setLevel(logging.ERROR)
+# Suppress HTTP request and AFC logs
+logging.getLogger("httpx").setLevel(logging.ERROR)
+logging.getLogger("httpcore").setLevel(logging.ERROR)
+# Suppress any loggers with "afc" in the name
+for logger_name in logging.root.manager.loggerDict:
+    if "afc" in logger_name.lower() or "http" in logger_name.lower():
+        logging.getLogger(logger_name).setLevel(logging.ERROR)
+
 # Define base paths and constants
 BASE_DIR = Path(__file__).parent.parent
 CSV_FILE = BASE_DIR / 'data' / 'documentation' / 'website_raw_data.csv'
@@ -65,7 +75,7 @@ Return a JSON list of objects, where each object corresponds to one row of the t
 Each object must have the following keys (exactly in this order):
 "States", "Suspected", "Confirmed", "Probable", "HCW*", "Deaths (Confirmed Cases)".
 
-"States" corresponds to the states of Nigeria: Ondo, Edo, Bauchi, Taraba, Benue, Ebonyi, Kogi, Kaduna, Plateau, Enugu, Cross River, Rivers, Delta, Nasarawa, Anambra, Gombe, Niger, Imo, Jigawa, Bayelsa, Adamawa, Fct, Katsina, Kano, Oyo, Lagos, Ogun, Yobe, Sokoto, Kebbi, Zamfara, Akwa Ibom, Ekiti, Kwara, Borno, Osun, Abia.
+"States" corresponds to the states of Nigeria: Ondo, Edo, Bauchi, Taraba, Benue, Ebonyi, Kogi, Kaduna, Plateau, Enugu, Cross River, Rivers, Delta, Nasarawa, Anambra, Gombe, Niger, Imo, Jigawa, Bayelsa, Adamawa, Fct, Katsina, Kano, Oyo, Lagos, Ogun, Yobe, Sokoto, Kebbi, Zamfara, Akwa Ibom, Ekiti, Kwara, Borno, Osun, Abia. These are the correct names, sometimes there may be a typo in the image.
 You should include ONLY the names of the States that you see in the image.
 You can only use these names of states, but order may often differ. Not all states have to be included in an image. You need to write the names of States in the order in which they appear in the image you see.
 
@@ -154,8 +164,8 @@ def process_reports_from_csv(model_name="gemini-2.0-flash"):
         enhanced_name = row.get('Enhanced_name', '').strip()
         compatible = row.get('Compatible', '').strip()
         
-        # Skip if not enhanced or already processed or not compatible or not in our year range
-        if enhanced != 'Y' or processed == 'Y' or compatible == 'N' or not year or not week:
+        # Skip if not enhanced or not compatible or not in our year range
+        if enhanced != 'Y' or compatible == 'N' or not year or not week:
             continue
         
         # Only process years 2021-2025
@@ -181,17 +191,33 @@ def process_reports_from_csv(model_name="gemini-2.0-flash"):
         base_filename = os.path.splitext(enhanced_name)[0]
         output_path = output_dir / f"{base_filename}.csv"
         
-        # Skip if already processed (file exists)
+        # Handle file status logic
+        # Case 1: Output file exists - mark as processed if not already
         if output_path.exists():
-            row['Processed'] = 'Y'
+            if processed != 'Y':
+                row['Processed'] = 'Y'
+                modified = True
+                logging.info(f"Found existing processed file: {base_filename}.csv")
+            continue  # Skip further processing since file already exists
+            
+        # Case 2: Marked as processed but file doesn't exist - reset status
+        if processed == 'Y':
+            row['Processed'] = ''
+            processed = ''
             modified = True
-            logging.info(f"Found existing processed file: {base_filename}.csv")
-            continue
+            logging.info(f"Reset processing status for {base_filename}.csv - file not found")
+            # Continue processing to regenerate the file
         
-        # Skip if input file doesn't exist
+        # Case 3: Input file doesn't exist - can't process
         if not input_path.exists():
             logging.warning(f"Enhanced image not found: {input_path}")
             continue
+        
+        # At this point we have:
+        # - No output file exists
+        # - Input file exists
+        # - Status is not 'Y' (either reset or was never processed)
+        # So we proceed with processing
         
         logging.info(f"Processing {enhanced_name} (Year: {year}, Week: {week})")
         
@@ -229,8 +255,8 @@ def process_reports_from_csv(model_name="gemini-2.0-flash"):
                 continue
             
             # Convert both lists into lists of dictionaries
-            dict_rows_1 = [row.dict(by_alias=True) for row in table_rows_1]
-            dict_rows_2 = [row.dict(by_alias=True) for row in table_rows_2]
+            dict_rows_1 = [row.model_dump(by_alias=True) for row in table_rows_1]
+            dict_rows_2 = [row.model_dump(by_alias=True) for row in table_rows_2]
             
             # Create sorted versions for comparison by filtering out blank 'States' rows,
             # removing rows where all keys (except 'States') are blank, and sorting alphabetically (excluding 'Total' row)
