@@ -37,6 +37,14 @@ from datetime import datetime
 from pathlib import Path
 from bs4 import BeautifulSoup, Comment
 
+# Define base paths and constants
+BASE_DIR = Path(__file__).parent.parent
+CSV_FILE = BASE_DIR / 'data' / 'documentation' / 'website_raw_data.csv'
+PDF_FOLDER = BASE_DIR / 'data' / 'raw' / 'downloaded'
+PDF_FOLDER.mkdir(parents=True, exist_ok=True)
+DEST_FOLDER = BASE_DIR / 'data' / 'raw' / 'year'
+
+# Logging configuration
 class NewlineLoggingHandler(logging.StreamHandler):
     """Custom logging handler that adds a newline after each log entry."""
     def emit(self, record):
@@ -46,13 +54,6 @@ class NewlineLoggingHandler(logging.StreamHandler):
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s', handlers=[NewlineLoggingHandler()])
-
-# Define base paths and constants
-BASE_DIR = Path(__file__).parent.parent
-CSV_FILE = BASE_DIR / 'data' / 'documentation' / 'website_raw_data.csv'
-PDF_FOLDER = BASE_DIR / 'data' / 'raw' / 'downloaded'
-PDF_FOLDER.mkdir(parents=True, exist_ok=True)
-DEST_FOLDER = BASE_DIR / 'data' / 'raw' / 'year'
 
 def get_fieldnames():
     """
@@ -119,6 +120,9 @@ def download_lassa_pdfs():
         # If PDF file does not exist and 'Downloaded' is 'Y', reset 'Downloaded' to ''
         if not pdf_path.exists() and row.get('Downloaded', '').strip() == 'Y':
             row['Downloaded'] = ''
+        # If PDF file exists and 'Downloaded' is '', update 'Downloaded' to 'Y'
+        elif pdf_path.exists() and row.get('Downloaded', '').strip() == '':
+            row['Downloaded'] = 'Y'
         # Only process if link is not 'wrong' and not empty and not already downloaded
         if link and link.lower() != 'wrong' and row.get('Downloaded', '').strip() != 'Y' and row.get('Recovered', '').strip() != 'N':
             try:

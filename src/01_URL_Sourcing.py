@@ -36,6 +36,16 @@ from datetime import datetime
 from pathlib import Path
 from bs4 import BeautifulSoup, Comment
 
+# Configure logging
+class NewlineLoggingHandler(logging.StreamHandler):
+    """Custom logging handler that adds a newline after each log entry."""
+    def emit(self, record):
+        super().emit(record)
+        self.stream.write('\n')
+        self.flush()
+
+logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s', handlers=[NewlineLoggingHandler()])
+
 # Define base paths and constants
 BASE_DIR = Path(__file__).parent.parent
 CSV_FILE = BASE_DIR / 'data' / 'documentation' / 'website_raw_data.csv'
@@ -55,18 +65,8 @@ response = requests.get(list_page_url)
 response.raise_for_status()
 soup = BeautifulSoup(response.text, "html.parser")
 
-# Configure logging
-class NewlineLoggingHandler(logging.StreamHandler):
-    """Custom logging handler that adds a newline after each log entry."""
-    def emit(self, record):
-        super().emit(record)
-        self.stream.write('\n')
-        self.flush()
-
-logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s', handlers=[NewlineLoggingHandler()])
-
-
-def process_file_status_update():
+# Define function to rename Lassa fever report filenames and extract metadata
+def rename_lassa_file(old_name):
     """
     Standardize Lassa fever report filenames and extract metadata.
     
@@ -232,6 +232,7 @@ def process_file_status_update():
         logging.error(f"Error reading {website_data_path}: {e}")
         return
 
+    rows_updated = []
     # Process file_status rows for both wrong_link and missing_row in one loop
     for fs in file_status_rows:
         note = fs.get('Notes', '').strip()
@@ -256,6 +257,7 @@ def process_file_status_update():
                     row['year'] = fs_year_last2
                     row['week'] = fs_week
                     row['link'] = fs_correct_link
+                    rows_updated.append(row)
         elif note == 'missing_row':
             exists = any(row.get('year', '').strip() == fs_year_last2 and row.get('week', '').strip() == fs_week for row in website_rows)
             if not exists:
@@ -267,12 +269,14 @@ def process_file_status_update():
                 new_row['link'] = fs.get('correct_link', '').strip()
                 new_row['new_name'] = fs.get('new_name', '').strip()
                 website_rows.append(new_row)
+                rows_updated.append(new_row)
         elif status == 'Corrupted':
             for row in website_rows:
                 row_year = row.get('year', '').strip()
                 row_week = row.get('week', '').strip()
                 if row_year == fs_year_last2 and row_week == fs_week:
                     row['Compatible'] = 'N'
+                    rows_updated.append(row)
         elif status == 'Missing':
             for row in website_rows:
                 row_year = row.get('year', '').strip()
@@ -280,6 +284,7 @@ def process_file_status_update():
                 if row_year == fs_year_last2 and row_week == fs_week:
                     row['Broken_Link'] = 'Y'
                     row['Recovered'] = 'N'
+                    rows_updated.append(row)
 
     # New code: update 'Downloaded' field based on files available in the downloaded folder
     downloaded_dir = BASE_DIR / 'data' / 'raw' / 'downloaded'
@@ -288,17 +293,16 @@ def process_file_status_update():
         for row in website_rows:
             if row.get('download_name', '').strip() in downloaded_files:
                 row['Downloaded'] = 'Y'
+                rows_updated.append(row)
 
-    # Write the updated website_raw_data.csv
-    try:
+    if rows_updated:
         with open(website_data_path, 'w', newline='') as ws_file:
             writer = csv.DictWriter(ws_file, fieldnames=website_fieldnames)
             writer.writeheader()
             writer.writerows(website_rows)
-        logging.info(f"Updated website_raw_data.csv at {website_data_path}")
-    except Exception as e:
-        logging.error(f"Error writing to {website_data_path}: {e}")
-
+        logging.info(f"Updated {len(rows_updated)} rows in {website_data_path} based on file_status.csv.")
+    else:
+        logging.info("No rows updated in website_raw_data.csv based on file_status.csv.")
 
 def main():
     """
