@@ -17,26 +17,15 @@ This script is designed to be the single entry point for the entire pipeline,
 making it easier to containerize and deploy the application.
 """
 
-import os
 import sys
 import time
 import logging
 import importlib.util
 from pathlib import Path
 
-# Configure logging
-class NewlineLoggingHandler(logging.StreamHandler):
-    """Custom logging handler that adds a newline after each log entry."""
-    def emit(self, record):
-        super().emit(record)
-        self.stream.write('\n')
-        self.flush()
-
-logging.basicConfig(
-    level=logging.INFO, 
-    format='%(asctime)s - %(levelname)s: %(message)s',
-    handlers=[NewlineLoggingHandler()]
-)
+# Replace the current logging setup in main.py with:
+from src.utils.logging_config import configure_logging
+configure_logging()
 
 def import_module_from_file(module_name, file_path):
     """
