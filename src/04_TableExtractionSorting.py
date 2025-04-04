@@ -191,8 +191,8 @@ def process_single_report(report_metadata, model_name, output_dir):
             if comparison_1 == comparison_2:
                 logging.info(f"Both outputs are identical on relevant columns (States, Suspected, Confirmed, Deaths) on attempt {attempt}. Saving CSV.")
                 
-                # Save the data to CSV
-                if save_extracted_data_to_csv(dict_rows_1, output_path, fieldnames_table):
+                # Save the data to CSV with Year and Week
+                if save_extracted_data_to_csv(dict_rows_1, output_path, fieldnames_table, year=year, week=week):
                     logging.info(f"Successfully processed: {base_filename}.csv")
                     return True
                 else:
