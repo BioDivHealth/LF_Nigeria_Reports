@@ -130,7 +130,7 @@ def log_extraction_differences(diff_file, enhanced_name, attempt, max_attempts, 
         return False
 
 
-def save_extracted_data_to_csv(data, output_path, fieldnames):
+def save_extracted_data_to_csv(data, output_path, fieldnames, year=None, week=None):
     """
     Save extracted table data to a CSV file.
     
@@ -138,6 +138,8 @@ def save_extracted_data_to_csv(data, output_path, fieldnames):
         data (list): List of dictionaries containing table data
         output_path (Path): Path to save the CSV file
         fieldnames (list): List of column names for the CSV
+        year (str, optional): Year of the report (YY format)
+        week (str, optional): Week number of the report
         
     Returns:
         bool: True if saving was successful, False otherwise
@@ -155,11 +157,21 @@ def save_extracted_data_to_csv(data, output_path, fieldnames):
         
         # Write the filtered data to CSV
         with open(output_path, mode="w", newline="", encoding="utf-8") as csvfile:
+            # Add Year and Week to fieldnames if provided
+            if year is not None and 'Year' not in fieldnames:
+                fieldnames = ['Year'] + fieldnames
+            if week is not None and 'Week' not in fieldnames:
+                fieldnames = ['Week'] + fieldnames
+                
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
             for table_row in filtered_rows:
-                # Remove any internal fields before writing
+                # Remove any internal fields and add Year/Week
                 csv_row = {k: v for k, v in table_row.items() if not k.startswith("_")}
+                if year is not None:
+                    csv_row['Year'] = f"20{year}"
+                if week is not None:
+                    csv_row['Week'] = week
                 writer.writerow(csv_row)
         return True
     except Exception as e:
