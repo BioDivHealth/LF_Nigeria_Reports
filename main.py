@@ -56,7 +56,8 @@ def run_pipeline():
         {"name": "URL_Sourcing", "path": base_dir / "src" / "01_URL_Sourcing.py"},
         {"name": "PDF_Download", "path": base_dir / "src" / "02_PDF_Download.py"},
         {"name": "TableEnhancement", "path": base_dir / "src" / "03_TableEnhancement.py"},
-        {"name": "TableExtractionSorting", "path": base_dir / "src" / "04_TableExtractionSorting.py"}
+        {"name": "TableExtractionSorting", "path": base_dir / "src" / "04_TableExtractionSorting.py"},
+        {"name": "CombineData", "path": base_dir / "src" / "05_CombineData.py"}
     ]
     
     # Execute each script in sequence

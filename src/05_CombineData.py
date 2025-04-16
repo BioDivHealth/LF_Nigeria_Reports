@@ -16,6 +16,7 @@ Outputs:
 """
 
 import pandas as pd
+import csv
 from pathlib import Path
 import logging
 import sys
@@ -55,25 +56,43 @@ except ImportError:
 # --- Main Function ---
 def combine_yearly_data(processed_base_dir: Path, output_file: Path, start_yy: int, end_yy: int):
     """
-    Finds, reads, and combines yearly data CSVs from subdirectories into a single file.
+    Incrementally combines weekly Lassa fever data CSVs from year-specific directories into a single master CSV file.
+
+    For each year-folder (e.g., CSV_LF_22_Sorted), and each weekly CSV within:
+      - Loads the weekly CSV
+      - Appends only rows not already present in the combined output (using Year, Week, State as unique key if available)
+    This avoids duplicate rows and enables incremental, idempotent pipeline execution.
 
     Args:
-        processed_base_dir (Path): Base directory containing the year-specific subdirectories
-                                    (e.g., 'data/processed/').
-        output_file (Path): Path to save the combined CSV file.
-        start_yy (int): The first year (in YY format) to include.
-        end_yy (int): The last year (in YY format) to include.
+        processed_base_dir (Path): Base directory containing year-specific subdirectories (e.g., 'data/processed/')
+        output_file (Path): Path to save the combined CSV file
+        start_yy (int): First year (YY) to include
+        end_yy (int): Last year (YY) to include
     """
     logger = logging.getLogger(__name__)
     start_year_full = 2000 + start_yy
     end_year_full = 2000 + end_yy
-    logger.info(f"Starting data combination process for years {start_year_full}-{end_year_full}.")
+    logger.info(f"Starting data combination (incremental) for years {start_year_full}-{end_year_full}.")
     start_time = time.time()
 
-    all_dataframes = []
+    # Load existing combined CSV if present
+    if output_file.exists():
+        try:
+            combined_df = pd.read_csv(output_file)
+            logger.info(f"Loaded existing combined file: {output_file} ({len(combined_df)} rows)")
+        except Exception as e:
+            logger.error(f"Failed to load existing combined file: {e}. Starting fresh.")
+            combined_df = pd.DataFrame()
+    else:
+        combined_df = pd.DataFrame()
+
+    # Determine unique key columns for deduplication
+    key_candidates = ["Year", "Week", "State"]
+    key_columns = [col for col in key_candidates if (not combined_df.empty and col in combined_df.columns)]
+
     years_processed = []
     files_read_count = 0
-
+    new_rows_count = 0
     for year_short in range(start_yy, end_yy + 1):
         year_dir_name = f"CSV_LF_{year_short}_Sorted"
         year_dir_path = processed_base_dir / year_dir_name
@@ -82,108 +101,136 @@ def combine_yearly_data(processed_base_dir: Path, output_file: Path, start_yy: i
         if year_dir_path.is_dir():
             logger.info(f"Scanning directory for year {full_year}: {year_dir_path}")
             year_files = list(year_dir_path.glob('*.csv'))
-
             if not year_files:
                 logger.warning(f"No CSV files found in {year_dir_path}. Skipping year {full_year}.")
                 continue
-
-            yearly_dataframes = []
             for file_path in year_files:
                 try:
-                    logger.debug(f"Reading file: {file_path.name}")
-                    df = pd.read_csv(file_path)
-                    if not df.empty:
-                        # Verify Year and Week columns exist
-                        if 'Year' not in df.columns or 'Week' not in df.columns:
-                            logger.warning(f"Missing Year or Week column in {file_path.name}, skipping")
-                            continue
-                        yearly_dataframes.append(df)
-                        files_read_count += 1
+                    df = pd.read_csv(file_path, on_bad_lines='skip')
+                    files_read_count += 1
+                    if df.empty:
+                        logger.debug(f"File {file_path.name} is empty. Skipping.")
+                        continue
+                except Exception as e:
+                    logger.debug(f"Suppressed error reading {file_path.name}: {e}")
+                    continue
+                    # Infer key columns if not set yet
+                    if not key_columns:
+                        key_columns = [col for col in key_candidates if col in df.columns]
+                    if not key_columns:
+                        logger.error(f"No suitable key columns found in {file_path.name}. Skipping.")
+                        continue
+                    # Convert key columns to string for robust comparison
+                    for col in key_columns:
+                        df[col] = df[col].astype(str)
+                    if not combined_df.empty:
+                        for col in key_columns:
+                            combined_df[col] = combined_df[col].astype(str)
+                        # Identify new rows not in combined_df
+                        merged = df.merge(combined_df[key_columns], on=key_columns, how='left', indicator=True)
+                        mask = merged['_merge'] == 'left_only'
+                        new_rows = df[mask.values]
                     else:
-                        logger.warning(f"File is empty, skipping: {file_path.name}")
-                except pd.errors.EmptyDataError:
-                    logger.warning(f"File is empty (EmptyDataError), skipping: {file_path.name}")
+                        new_rows = df
+                    if not new_rows.empty:
+                        combined_df = pd.concat([combined_df, new_rows], ignore_index=True)
+                        new_rows_count += len(new_rows)
+                        logger.info(f"Appended {len(new_rows)} new rows from {file_path.name}")
+                    else:
+                        logger.debug(f"No new rows to append from {file_path.name}")
                 except Exception as e:
                     logger.error(f"Error reading file {file_path.name}: {e}")
-
-            if yearly_dataframes:
-                # Combine all dataframes for the current year
-                year_combined_df = pd.concat(yearly_dataframes, ignore_index=True)
-                all_dataframes.append(year_combined_df)
-                years_processed.append(str(full_year))
-                logger.info(f"Successfully read {len(yearly_dataframes)} files for year {full_year}.")
-            else:
-                 logger.warning(f"No valid data read from CSV files for year {full_year}.")
-
+            years_processed.append(str(full_year))
         else:
             logger.warning(f"Directory for year {full_year} not found: {year_dir_path}. Skipping.")
 
-    if not all_dataframes:
-        logger.error("No data files found or read successfully in the specified range. Cannot combine.")
+    if combined_df.empty:
+        logger.error("No data found or read successfully in the specified range. Cannot combine.")
         return
 
-    logger.info(f"Combining data for years: {', '.join(years_processed)}")
+    # --- Update website_raw_data.csv with Combined status ---
+    website_csv = (processed_base_dir.parent.parent / 'data' / 'documentation' / 'website_raw_data.csv').resolve()
     try:
-        # Combine data from all processed years
-        combined_df = pd.concat(all_dataframes, ignore_index=True)
-        logger.info(f"Successfully combined {len(combined_df)} rows from {files_read_count} files across {len(all_dataframes)} years.")
+        # Load website_raw_data.csv
+        if website_csv.exists():
+            website_df = pd.read_csv(website_csv, dtype=str)
+            if 'Combined' not in website_df.columns:
+                website_df['Combined'] = ''
+                logger.info("Added 'Combined' column to website_raw_data.csv")
+            # Mark rows as Combined=Y for each week that was included
+            updated_count = 0
+            for idx, row in website_df.iterrows():
+                yr = str(row.get('year', '')).strip()
+                wk = str(row.get('week', '')).strip()
+                if yr and wk:
+                    # Check if this week/year is present in combined_df
+                    matched = (
+                        (combined_df['Year'].astype(str) == yr) &
+                        (combined_df['Week'].astype(str) == wk)
+                    )
+                    if matched.any():
+                        if row.get('Combined', '') != 'Y':
+                            website_df.at[idx, 'Combined'] = 'Y'
+                            updated_count += 1
+            if updated_count > 0:
+                website_df.to_csv(website_csv, index=False, quoting=csv.QUOTE_NONNUMERIC)
+                logger.info(f"Updated 'Combined' status for {updated_count} rows in website_raw_data.csv")
+            else:
+                logger.info("No new rows marked as Combined in website_raw_data.csv")
+        else:
+            logger.warning(f"website_raw_data.csv not found at {website_csv}")
+    except Exception as e:
+        logger.error(f"Error updating website_raw_data.csv with Combined status: {e}")
 
-        # Optional: Sort the combined data if columns exist
-        sort_columns = []
-        if 'Year' in combined_df.columns: sort_columns.append('Year')
-        if 'Week' in combined_df.columns: sort_columns.append('Week')
-        if 'State' in combined_df.columns: sort_columns.append('State') # Assuming 'State' might exist
-
+    logger.info(f"Writing combined data ({len(combined_df)} total rows, {new_rows_count} new) for years: {', '.join(years_processed)}")
+    try:
+        # Optional: Sort combined data
+        sort_columns = [col for col in key_candidates if col in combined_df.columns]
         if sort_columns:
-            # Ensure numeric columns are treated as numbers for sorting
-            if 'Year' in sort_columns: combined_df['Year'] = pd.to_numeric(combined_df['Year'], errors='coerce')
-            if 'Week' in sort_columns: combined_df['Week'] = pd.to_numeric(combined_df['Week'], errors='coerce')
+            for col in sort_columns:
+                if col in ["Year", "Week"]:
+                    combined_df[col] = pd.to_numeric(combined_df[col], errors='coerce')
             try:
                 combined_df.sort_values(by=sort_columns, inplace=True, na_position='last')
                 logger.info(f"Sorted combined data by: {', '.join(sort_columns)}")
             except Exception as e:
                 logger.warning(f"Could not sort data by {sort_columns}: {e}. Proceeding without sorting.")
-
-
-        # Convert numeric columns to integers before saving
-        integer_columns = ['Suspected', 'Confirmed', 'Probable', 'HCW.', 'Deaths..Confirmed.Cases.']
+        # Convert numeric columns to integer type if possible
+        integer_columns = ['Suspected', 'Confirmed', 'Probable', 'HCW', 'Deaths']
         for col in integer_columns:
             if col in combined_df.columns:
-                # First convert to numeric (handling any non-numeric values)
                 combined_df[col] = pd.to_numeric(combined_df[col], errors='coerce')
-                # Then convert to integer (NaN values will become NaN again)
                 combined_df[col] = combined_df[col].fillna(-1).astype(int).replace(-1, pd.NA)
                 logger.info(f"Converted column '{col}' to integer type")
             else:
                 logger.debug(f"Column '{col}' not found in the combined data")
-                
         combined_df.to_csv(output_file, index=False)
         logger.info(f"Combined data saved to {output_file}")
-
     except Exception as e:
         logger.error(f"Error during final concatenation or saving the combined file: {e}")
-        logger.exception("Detailed traceback:") # Add exception details to log
-
+        logger.exception("Detailed traceback:")
     end_time = time.time()
     logger.info(f"Data combination finished in {end_time - start_time:.2f} seconds.")
 
 
-# --- Execution Block ---
-if __name__ == "__main__":
-    # Configure logging using the shared configuration
+def main():
+    """
+    Main function to execute the incremental combination of Lassa fever data.
+    Configures logging, sets up paths, and runs the combine_yearly_data function.
+    """
     configure_logging()
     logger = logging.getLogger(__name__)
-
-    # Define the output filename dynamically based on the year range
     start_year_full = 2000 + START_YEAR_SHORT
     end_year_full = 2000 + END_YEAR_SHORT
     output_filename = f"combined_lassa_data_{start_year_full}-{end_year_full}.csv"
     OUTPUT_FILE_PATH = PROCESSED_DATA_DIR / output_filename
-    OUTPUT_FILE_PATH.parent.mkdir(parents=True, exist_ok=True) # Ensure output dir exists
-
+    OUTPUT_FILE_PATH.parent.mkdir(parents=True, exist_ok=True)  # Ensure output dir exists
     combine_yearly_data(
         processed_base_dir=PROCESSED_DATA_DIR,
         output_file=OUTPUT_FILE_PATH,
         start_yy=START_YEAR_SHORT,
         end_yy=END_YEAR_SHORT
     )
+
+if __name__ == "__main__":
+    main()

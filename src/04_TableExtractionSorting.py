@@ -184,7 +184,7 @@ def process_single_report(report_metadata, model_name, output_dir):
             
             fieldnames_table = [
                 "States", "Suspected", "Confirmed",
-                "Probable", "HCW*", "Deaths (Confirmed Cases)"
+                "Probable", "HCW", "Deaths"
             ]
             
             # Compare only the relevant columns

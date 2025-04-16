@@ -27,7 +27,7 @@ class TableRow(BaseModel):
     Confirmed: str = Field(..., alias="Confirmed")
     Probable: str = Field(..., alias="Probable")
     HCW: str = Field(..., alias="HCW*")
-    Deaths: str = Field(..., alias="Deaths (Confirmed Cases)")
+    Deaths: str = Field(..., alias="Deaths \n (Confirmed Cases)")
 
 # Import the prompt template with appropriate error handling
 try:

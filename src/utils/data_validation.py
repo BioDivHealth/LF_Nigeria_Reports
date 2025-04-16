@@ -82,8 +82,7 @@ def filter_comparison_columns(rows):
             if column in row:
                 filtered_row[column] = row[column]
         filtered_rows.append(filtered_row)
-    
-    return filtered_rows
+        return filtered_rows
 
 
 def validate_logical_consistency(rows):
