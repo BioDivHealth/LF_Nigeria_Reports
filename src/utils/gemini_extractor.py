@@ -26,8 +26,8 @@ class TableRow(BaseModel):
     Suspected: str = Field(..., alias="Suspected")
     Confirmed: str = Field(..., alias="Confirmed")
     Probable: str = Field(..., alias="Probable")
-    HCW: str = Field(..., alias="HCW*")
-    Deaths: str = Field(..., alias="Deaths \n (Confirmed Cases)")
+    HCW: str = Field(..., alias="HCW")
+    Deaths: str = Field(..., alias="Deaths")
 
 # Import the prompt template with appropriate error handling
 try:
@@ -71,22 +71,23 @@ def extract_table_with_gemini(image_path, model_name):
 def parse_gemini_response(response):
     """
     Parse the Gemini API response into a list of dictionaries.
-    
+
     Args:
         response: The Gemini API response object
-        
+
     Returns:
         tuple: (success, result) where success is a boolean and result is either a list of dictionaries or an error message
     """
     try:
-        # Parse the response into TableRow objects
-        table_rows = response.parsed  # List[TableRow]
-        
-        # Convert to dictionaries
+        if response is None:
+            return False, "Gemini API response is None."
+        table_rows = getattr(response, "parsed", None)
+        if table_rows is None:
+            return False, "Gemini API response has no 'parsed' data."
         dict_rows = [row.model_dump(by_alias=True) for row in table_rows]
         return True, dict_rows
     except Exception as e:
-        return False, str(e)
+        return False, f"Exception during parsing: {str(e)}"
 
 
 def log_extraction_differences(diff_file, enhanced_name, attempt, max_attempts, normalized_1, normalized_2):
