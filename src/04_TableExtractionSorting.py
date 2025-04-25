@@ -327,7 +327,7 @@ def main():
         None
     """
     logging.info("Starting Lassa fever report table extraction and sorting process")
-    process_reports_from_csv(model_name="gemini-2.0-flash")
+    process_reports_from_csv(model_name="gemini-2.5-flash-preview-04-17")
     logging.info("Finished processing reports")
 
 
