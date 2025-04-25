@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from google import genai
 from PIL import Image
 from pydantic import BaseModel, Field
+from google.genai import types
 
 # Utility modules should use logging but not configure it - configuration is done in main scripts
 
@@ -55,14 +56,27 @@ def extract_table_with_gemini(image_path, model_name):
         image = Image.open(image_path)
         
         # Call the Gemini API
-        response = client.models.generate_content(
-            model=model_name,
-            contents=[prompt_template, image],
-            config={
-                "response_mime_type": "application/json",
-                "response_schema": list[TableRow],
-            }
-        )
+        if model_name == "gemini-2.0-flash":
+            response = client.models.generate_content(
+                model=model_name,
+                contents=[prompt_template, image],
+                config={
+                    "response_mime_type": "application/json",
+                    "response_schema": list[TableRow],
+                }
+            )
+        elif model_name == "gemini-2.5-flash-preview-04-17":
+            response = client.models.generate_content(
+                model=model_name,
+                contents=[prompt_template, image],
+                config = types.GenerateContentConfig(
+                    thinking_config = types.ThinkingConfig(
+                        thinking_budget=0,
+                    ),
+                    response_mime_type="application/json",
+                    response_schema=list[TableRow],
+                )
+            )
         return True, response
     except Exception as e:
         return False, str(e)
