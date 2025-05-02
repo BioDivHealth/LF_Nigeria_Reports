@@ -1,70 +1,155 @@
-# Lassa Reports Scraping
+# Lassa Fever Reports Scraping Pipeline
 
-This repository contains tools and scripts for scraping, processing, and analyzing Lassa fever situation reports from the Nigeria Centre for Disease Control (NCDC).
+A Python-based data processing pipeline for scraping, processing, and analyzing Lassa fever situation reports from the Nigeria Centre for Disease Control (NCDC).
+
+## Project Overview
+
+This pipeline automates the end-to-end processing of weekly Lassa fever reports:
+- Scrapes the NCDC website for report listings and extracts metadata.
+- Downloads raw PDF reports and organizes them by year.
+- Enhances table images in PDFs for accurate data extraction.
+- Uses Google Gemini AI to extract structured case data (Suspected, Confirmed, Probable, HCW, Deaths) at state and week granularity.
+- Validates logical consistency (Suspected ≥ Confirmed ≥ Deaths) with retry and correction logic.
+- Combines per-year CSV datasets into a unified master CSV for time-series analysis.
+- Provides an interactive Dash dashboard for exploring case trends by state, week, and year.
+
+**Data sources:**
+- Raw PDF situation reports from NCDC
+- Intermediate enhanced table images
+- Yearly extracted CSVs
+- Final combined master CSV
 
 ## Repository Structure
+```TeX
+└── Lassa_Reports_Scraping/
+    ├── README.md                # This file
+    ├── main.py                  # Orchestrates the pipeline
+    ├── requirements.txt         # Python dependencies
+    ├── .env                     # Environment variables (API keys)
+    ├── config/                # Optional configuration files
+    ├── data/
+    │   ├── raw/               # Raw downloaded PDFs
+    │   ├── processed/         # Processed data and images
+    │   │   ├── PDFs_Lines_{year}/    # Enhanced table images for each year
+    │   │   ├── CSV_LF_{year}_Sorted/ # Extracted and sorted CSV data
+    │   │   └── combined_lassa_data_{years}.csv  # Combined master CSV
+    │   └── documentation/       # CSV metadata tracking file statuses
+    ├── logs/                    # Log files generated during execution
+    ├── PDFs_Sourced/            # Temporary storage for sourced PDFs
+    ├── reports/                 # Additional analysis reports
+    ├── src/                     # Core scripts and modules
+    │   ├── 00_Update_Status.py      # Update processing status
+    │   │   - Scans processed directories and updates metadata CSV with current status.
+    │   │   - Tracks missing outputs and resets statuses for reprocessing.
+    │   ├── 01_URL_Sourcing.py       # Scrape report URLs and metadata
+    │   │   - Scrapes NCDC website for Lassa fever reports and extracts metadata.
+    │   │   - Standardizes filenames and updates `data/documentation/website_raw_data.csv`.
+    │   │   - Maintains download and processing status flags.
+    │   ├── 02_PDF_Download.py       # Download PDF reports
+    │   │   - Reads metadata CSV and downloads new PDF reports.
+    │   │   - Organizes PDFs by year under `data/raw/` and `PDFs_Sourced/`.
+    │   │   - Updates download status in metadata CSV.
+    │   ├── 03_TableEnhancement.py   # Enhance table visibility
+    │   │   - Renders PDF pages at high resolution.
+    │   │   - Detects table boundaries via color markers.
+    │   │   - Enhances lines, crops table images, and saves to `data/processed/PDFs_Lines_{year}/`.
+    │   ├── 04_TableExtractionSorting.py  # Extract & sort table data using AI
+    │   │   - Uses Google Gemini AI to extract tables from enhanced images.
+    │   │   - Validates logical consistency (Suspected ≥ Confirmed ≥ Deaths).
+    │   │   - Retries on inconsistencies, logs issues, and sorts outputs into `data/processed/CSV_LF_{year}_Sorted/`.
+    │   ├── 05_CombineData.py         # Combine yearly data into master CSV
+    │   │   - Loads per-year CSVs, concatenates, converts types, and sorts by Year & Week.
+    │   │   - Outputs combined master CSV to `data/processed/combined_lassa_data_{years}.csv`.
+    │   ├── Dashboard.py             # Interactive Dash dashboard
+    │   │   - Builds bar and line charts with Year/Week dropdown controls and callbacks.
+    │   ├── standardize_columns.py   # Column standardization utilities
+    │   ├── debug.py                 # Debugging utilities
+    │   ├── prompts/                 # AI prompt templates
+    │   │   ├── table_extraction_prompt.py  # Template for AI table extraction prompt
+    │   │   └── ...
+    │   └── utils/                   # Utility modules
+    │       ├── logging_config.py    # Configures NewlineLoggingHandler and suppresses AFC logs
+    │       └── ...
+    └── **notebooks/**              # Jupyter notebooks and experiments
+```
 
-- **config/**  
-  Configuration files and settings used across the project.
 
-- **data/**  
-  - **documentation/**  
-    CSV files tracking report metadata, download status, and processing status.
-  - **processed/**  
-    - **PDFs_Lines_2021/**, **PDFs_Lines_2022/**, **PDFs_Lines_2023/**, **PDFs_Lines_2024/**, **PDFs_Lines_2025/**  
-      Enhanced table images extracted from PDFs, organized by year.
-    - **CSV_LF_21_Sorted/**, **CSV_LF_22_Sorted/**, **CSV_LF_23_Sorted/**, **CSV_LF_24_Sorted/**, **CSV_LF_25_Sorted/**  
-      Sorted and processed CSV data extracted from tables.
-  - **raw/**  
-    - **downloaded/**  
-      Raw downloaded PDF files from NCDC website.
-    - **year/**  
-      PDFs organized by year with standardized filenames.
+## Setup
 
-- **misc/**  
-  Miscellaneous resources:
-  - **clean/**  
-    Cleaned data files for testing and development.
-  - **debug_green_mask.png**, **debug_green_overlay.png**  
-    Debug images used for table enhancement development.
-  - **PDFs/**, **PDFs_Lines_Test/**  
-    Test PDF files and image outputs.
+1. Clone the repository and create a virtual environment:
+   ```bash
+   git clone <repo_url>
+   cd Lassa_Reports_Scraping
+   python3 -m venv .venv
+   source .venv/bin/activate
+   pip install -r requirements.txt
+   ```
 
-- **reports/**  
-  Additional analysis reports and documentation.
+2. Create a `.env` file in the project root with your API keys:
+   ```bash
+   GOOGLE_GENAI_API_KEY=<your_key>
+   ```
 
-## Processing Pipeline
+## Usage
 
-The project implements a complete data pipeline for Lassa fever reports:
+### Run the Full Pipeline
 
-1. **URL Sourcing** (`01_URL_Sourcing.py`)  
-   Scrapes the NCDC website for Lassa fever reports, extracts metadata, and standardizes filenames. Updates `website_raw_data.csv` with report metadata and maintains file status tracking.
+```bash
+python main.py
+```
 
-2. **PDF Download** (`02_PDF_Download.py`)  
-   Downloads PDF reports based on URLs in the metadata CSV, updates download status, and organizes files into year-based folders with standardized naming.
+This executes the following steps in order:
 
-3. **Table Enhancement** (`03_TableEnhancement.py`)  
-   Processes downloaded PDFs to enhance table visibility:
-   - Renders PDF pages at high DPI
-   - Detects table boundaries using green row markers
-   - Enhances vertical and horizontal lines
-   - Crops and saves processed images to year-specific folders
+1. **URL Sourcing** (`src/01_URL_Sourcing.py`)
+2. **PDF Download** (`src/02_PDF_Download.py`)
+3. **Table Enhancement** (`src/03_TableEnhancement.py`)
+4. **Table Extraction & Sorting** (`src/04_TableExtractionSorting.py`)
+5. **Data Combination** (`src/05_CombineData.py`)
 
-4. **Status Updates** (`00_Update_Status.py`)  
-   Tracks processing status by scanning the processed directories and updating metadata CSV to reflect current state of enhancement.
+### Run Individual Steps
 
-5. **Table Extraction and Sorting** (`04_TableExtractionSorting.py`)  
-   Extracts data from enhanced table images and converts it to structured CSV format.
+You can run any script independently:
+```bash
+python src/01_URL_Sourcing.py
+```
 
-## Requirements
+### Update Processing Status
 
-The project requires several Python packages:
-- requests
-- beautifulsoup4
-- opencv-python
-- numpy
-- Pillow
-- PyMuPDF
-- python-dotenv
-- pandas
-- pydantic
+```bash
+python src/00_Update_Status.py
+```
+
+### Dashboard
+
+Launch the interactive dashboard:
+```bash
+python src/Dashboard.py
+```
+Access it at `http://127.0.0.1:8050`.
+
+## Data Flow
+
+1. **Raw PDFs**: `data/raw/`, `PDFs_Sourced/`
+2. **Enhanced Images**: `data/processed/PDFs_Lines_{year}/`
+3. **Extracted CSV**: `data/processed/CSV_LF_{year}_Sorted/`
+4. **Combined Master CSV**: `data/processed/combined_lassa_data_{years}.csv`
+5. **Metadata**: `data/documentation/website_raw_data.csv` and status CSVs
+
+## Dependencies
+
+- Python 3.8+
+- requests>=2.31.0
+- beautifulsoup4>=4.12.2
+- opencv-python>=4.8.0
+- numpy>=1.24.0
+- Pillow>=10.0.0
+- PyMuPDF>=1.22.5
+- python-dotenv>=1.0.0
+- google-genai>=0.3.0
+- pydantic>=2.4.0
+- pandas>=1.4.0
+- mistralai>=0.1.0
+- plotly>=5.0.0
+- dash>=2.0.0
+
+(See `requirements.txt` for exact versions.)
