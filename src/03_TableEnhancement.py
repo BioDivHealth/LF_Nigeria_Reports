@@ -75,13 +75,15 @@ def enhance_table_lines_from_pdf_hq(
     tr1, linelength1, linegap1, toler1,
     h1, s1, v1, h2, s2, v2, 
     page_number=3, 
-    dpi=600
+    dpi=600, year=None, week=None
 ):
     """
     Enhances vertical column separators and draws horizontal lines at
     top boundary, bottom boundary, and header bottom.
     """
     doc = fitz.open(pdf_path)
+    if year == '20' and week =='23':
+        page_number = 4
     page = doc[page_number]
 
     # 1. Render PDF page at high DPI
@@ -118,10 +120,27 @@ def enhance_table_lines_from_pdf_hq(
                 cv2.line(img, (x1, y1_global), (x2, y2_global), (100, 100, 100), 1)
  
     # 5. Crop and save image
-    crop_bottom = min(bottom_boundary + 20, img.shape[0])
-    crop_top = top_boundary - 360
-    new_width = int(img.shape[1] * 0.59)
-    new_width2 = int(img.shape[1] * 0.07)
+    # Determine crop boundaries based on year
+    if year == '20':
+        crop_bottom = min(bottom_boundary + 120, img.shape[0])
+        crop_top = top_boundary - 390
+    else:
+        crop_bottom = min(bottom_boundary + 20, img.shape[0])
+        crop_top = top_boundary - 360
+    
+    # Calculate width boundaries for cropping based on year and week
+    width_ratio = 0.59  # Default ratio
+    
+    if year == '20':
+        if int(week) >= 25:
+            width_ratio = 0.56
+        elif int(week) in [9, 22]:
+            width_ratio = 0.60
+        elif int(week) in [7, 8]:
+            width_ratio = 0.57
+    
+    new_width = int(img.shape[1] * width_ratio)
+    new_width2 = int(img.shape[1] * 0.07)  # Left margin
     img_cropped = img[crop_top:crop_bottom, new_width2:new_width]
     
     output_pil = Image.fromarray(cv2.cvtColor(img_cropped, cv2.COLOR_BGR2RGB))
@@ -140,9 +159,8 @@ def get_file_paths(row):
     """Generate file paths based on row data."""
     year = row.get('year', '').strip()
     new_name = row.get('new_name', '').strip()
-    full_year = f"20{year}"
     
-    output_dir = BASE_DIR / 'data' / 'processed' / f"PDFs_Lines_{full_year}"
+    output_dir = BASE_DIR / 'data' / 'processed' / f"PDFs_Lines_{year}"
     pdf_path = BASE_DIR / 'data' / 'raw' / 'year' / year / new_name
     enhanced_name = f"Lines_{new_name.replace('.pdf', '')}_page3.png"
     output_path = output_dir / enhanced_name
@@ -177,7 +195,7 @@ def process_reports_from_csv():
         
         # Skip if not compatible, missing year/week, or not in target years
         if (compatible == 'N' or not year or not week or 
-            year not in ['21', '22', '23', '24', '25']):
+            year not in ['20', '21', '22', '23', '24', '25']):
             continue
             
         # Get paths
@@ -187,11 +205,13 @@ def process_reports_from_csv():
         if not output_path.exists() and enhanced == 'Y':
             row['Enhanced'] = ''
             row['Enhanced_name'] = ''
+            enhanced = ''
             modified = True
             logging.info(f"Reset enhanced status for {row.get('new_name')} - file not found")
         elif output_path.exists() and enhanced != 'Y':
             row['Enhanced'] = 'Y'
             row['Enhanced_name'] = enhanced_name
+            enhanced = 'Y'
             modified = True
             logging.info(f"Updated enhanced status for {row.get('new_name')} - file exists")
             
@@ -213,7 +233,7 @@ def process_reports_from_csv():
         
         try:
             logging.info(f"Enhancing {row.get('new_name')} (Year: {year}, Week: {week})")
-            enhance_table_lines_from_pdf_hq(str(pdf_path), str(output_path), **DEFAULT_PARAMS)
+            enhance_table_lines_from_pdf_hq(str(pdf_path), str(output_path), **DEFAULT_PARAMS, year=year, week=week)
             
             if output_path.exists():
                 row['Enhanced'] = 'Y'

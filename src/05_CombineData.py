@@ -87,7 +87,7 @@ def combine_yearly_data(processed_base_dir: Path, output_file: Path, start_yy: i
         combined_df = pd.DataFrame()
 
     # Determine unique key columns for deduplication
-    key_candidates = ["Year", "Week", "State"]
+    key_candidates = ["Year", "Week", "States"]
     key_columns = [col for col in key_candidates if (not combined_df.empty and col in combined_df.columns)]
 
     years_processed = []
@@ -106,14 +106,11 @@ def combine_yearly_data(processed_base_dir: Path, output_file: Path, start_yy: i
                 continue
             for file_path in year_files:
                 try:
-                    df = pd.read_csv(file_path, on_bad_lines='skip')
+                    df = pd.read_csv(file_path, encoding='utf-8')
                     files_read_count += 1
                     if df.empty:
                         logger.debug(f"File {file_path.name} is empty. Skipping.")
                         continue
-                except Exception as e:
-                    logger.debug(f"Suppressed error reading {file_path.name}: {e}")
-                    continue
                     # Infer key columns if not set yet
                     if not key_columns:
                         key_columns = [col for col in key_candidates if col in df.columns]
@@ -149,7 +146,7 @@ def combine_yearly_data(processed_base_dir: Path, output_file: Path, start_yy: i
         return
 
     # --- Update website_raw_data.csv with Combined status ---
-    website_csv = (processed_base_dir.parent.parent / 'data' / 'documentation' / 'website_raw_data.csv').resolve()
+    website_csv = (BASE_DIR / 'data' / 'documentation' / 'website_raw_data.csv').resolve()
     try:
         # Load website_raw_data.csv
         if website_csv.exists():
@@ -159,11 +156,13 @@ def combine_yearly_data(processed_base_dir: Path, output_file: Path, start_yy: i
                 logger.info("Added 'Combined' column to website_raw_data.csv")
             # Mark rows as Combined=Y for each week that was included
             updated_count = 0
+            newly_added_weeks = []
             for idx, row in website_df.iterrows():
                 yr = str(row.get('year', '')).strip()
                 wk = str(row.get('week', '')).strip()
                 if yr and wk:
-                    # Check if this week/year is present in combined_df
+                    logger.debug(f"Checking Year: {yr}, Week: {wk} in combined data")
+                    # Check if this week/year is present in combined_df or newly added
                     matched = (
                         (combined_df['Year'].astype(str) == yr) &
                         (combined_df['Week'].astype(str) == wk)
@@ -172,6 +171,20 @@ def combine_yearly_data(processed_base_dir: Path, output_file: Path, start_yy: i
                         if row.get('Combined', '') != 'Y':
                             website_df.at[idx, 'Combined'] = 'Y'
                             updated_count += 1
+                            logger.debug(f"Marked Combined for Year: {yr}, Week: {wk}")
+                    else:
+                        newly_added_weeks.append((yr, wk))
+            for yr, wk in newly_added_weeks:
+                logger.debug(f"Checking newly added Year: {yr}, Week: {wk} in combined data")
+                matched = (
+                    (combined_df['Year'].astype(str) == yr) &
+                    (combined_df['Week'].astype(str) == wk)
+                )
+                if matched.any():
+                    if website_df.loc[(website_df['year'] == yr) & (website_df['week'] == wk), 'Combined'].values[0] != 'Y':
+                        website_df.loc[(website_df['year'] == yr) & (website_df['week'] == wk), 'Combined'] = 'Y'
+                        updated_count += 1
+                        logger.debug(f"Marked Combined for Year: {yr}, Week: {wk}")
             if updated_count > 0:
                 website_df.to_csv(website_csv, index=False, quoting=csv.QUOTE_NONNUMERIC)
                 logger.info(f"Updated 'Combined' status for {updated_count} rows in website_raw_data.csv")

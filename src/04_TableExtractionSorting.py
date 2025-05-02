@@ -80,10 +80,8 @@ def process_single_report(report_metadata, model_name, output_dir):
         logging.warning(f"No enhanced image name for Year {year}, Week {week}")
         return False
     
-    full_year = f"20{year}"
-    
     # Input folder with enhanced images
-    input_dir = BASE_DIR / 'data' / 'processed' / f"PDFs_Lines_{full_year}"
+    input_dir = BASE_DIR / 'data' / 'processed' / f"PDFs_Lines_{year}"
     input_path = input_dir / enhanced_name
     
     # Check if input file exists
@@ -262,11 +260,10 @@ def process_reports_from_csv(model_name="gemini-2.0-flash"):
             continue
         
         # Only process years 2021-2025
-        if year not in ['21', '22', '23', '24', '25']:
+        if year not in ['20', '21', '22', '23', '24', '25']:
             continue
         
         # Output folder for CSV files
-        full_year = f"20{year}"
         output_dir = BASE_DIR / 'data' / 'processed' / f"CSV_LF_{year}_Sorted"
         output_dir.mkdir(parents=True, exist_ok=True)
         
@@ -327,7 +324,7 @@ def main():
         None
     """
     logging.info("Starting Lassa fever report table extraction and sorting process")
-    process_reports_from_csv(model_name="gemini-2.5-flash-preview-04-17")
+    process_reports_from_csv(model_name="gemini-2.0-flash")
     logging.info("Finished processing reports")
 
 
