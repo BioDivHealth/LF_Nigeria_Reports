@@ -27,7 +27,9 @@ START_YEAR_SHORT = 21 # Use short year format (YY) for directory names
 END_YEAR_SHORT = 25   # Adjust if needed based on available data or current year
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
+DOCUMENTATION_DIR = DATA_DIR / "documentation"
 PROCESSED_DATA_DIR = DATA_DIR / "processed"
+CSV_DIR = PROCESSED_DATA_DIR / "CSV"
 LOG_DIR = BASE_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -95,7 +97,7 @@ def combine_yearly_data(processed_base_dir: Path, output_file: Path, start_yy: i
     new_rows_count = 0
     for year_short in range(start_yy, end_yy + 1):
         year_dir_name = f"CSV_LF_{year_short}_Sorted"
-        year_dir_path = processed_base_dir / year_dir_name
+        year_dir_path = processed_base_dir / 'CSV' / year_dir_name
         full_year = 2000 + year_short
 
         if year_dir_path.is_dir():
@@ -146,7 +148,7 @@ def combine_yearly_data(processed_base_dir: Path, output_file: Path, start_yy: i
         return
 
     # --- Update website_raw_data.csv with Combined status ---
-    website_csv = (BASE_DIR / 'data' / 'documentation' / 'website_raw_data.csv').resolve()
+    website_csv = (DOCUMENTATION_DIR / 'website_raw_data.csv').resolve()
     try:
         # Load website_raw_data.csv
         if website_csv.exists():
@@ -236,7 +238,7 @@ def main():
     start_year_full = 2000 + START_YEAR_SHORT
     end_year_full = 2000 + END_YEAR_SHORT
     output_filename = f"combined_lassa_data_{start_year_full}-{end_year_full}.csv"
-    OUTPUT_FILE_PATH = PROCESSED_DATA_DIR / output_filename
+    OUTPUT_FILE_PATH = DOCUMENTATION_DIR / output_filename
     OUTPUT_FILE_PATH.parent.mkdir(parents=True, exist_ok=True)  # Ensure output dir exists
     combine_yearly_data(
         processed_base_dir=PROCESSED_DATA_DIR,

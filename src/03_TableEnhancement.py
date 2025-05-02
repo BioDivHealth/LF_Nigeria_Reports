@@ -160,7 +160,7 @@ def get_file_paths(row):
     year = row.get('year', '').strip()
     new_name = row.get('new_name', '').strip()
     
-    output_dir = BASE_DIR / 'data' / 'processed' / f"PDFs_Lines_{year}"
+    output_dir = BASE_DIR / 'data' / 'processed' / 'PDF' / f"PDFs_Lines_{year}"
     pdf_path = BASE_DIR / 'data' / 'raw' / 'year' / year / new_name
     enhanced_name = f"Lines_{new_name.replace('.pdf', '')}_page3.png"
     output_path = output_dir / enhanced_name

@@ -81,7 +81,7 @@ def process_single_report(report_metadata, model_name, output_dir):
         return False
     
     # Input folder with enhanced images
-    input_dir = BASE_DIR / 'data' / 'processed' / f"PDFs_Lines_{year}"
+    input_dir = BASE_DIR / 'data' / 'processed' / 'PDF' / f"PDFs_Lines_{year}"
     input_path = input_dir / enhanced_name
     
     # Check if input file exists
@@ -264,7 +264,7 @@ def process_reports_from_csv(model_name="gemini-2.0-flash"):
             continue
         
         # Output folder for CSV files
-        output_dir = BASE_DIR / 'data' / 'processed' / f"CSV_LF_{year}_Sorted"
+        output_dir = BASE_DIR / 'data' / 'processed' / 'CSV' / f"CSV_LF_{year}_Sorted"
         output_dir.mkdir(parents=True, exist_ok=True)
         
         # Output CSV filename
