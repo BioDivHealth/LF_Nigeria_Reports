@@ -136,6 +136,8 @@ def enhance_table_lines_from_pdf_hq(
             width_ratio = 0.56
         elif int(week) in [9, 22]:
             width_ratio = 0.60
+        elif int(week) in [6]:
+            width_ratio = 0.65
         elif int(week) in [7, 8]:
             width_ratio = 0.57
     

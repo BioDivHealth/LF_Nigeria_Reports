@@ -25,10 +25,10 @@ Each object must have the following keys (exactly in this order):
 "States", "Suspected", "Confirmed", "Probable", "HCW*", "Deaths (Confirmed Cases)".
 
 **Important Validation Rules To Avoid Hallucination:**
-- The value for "Suspected" must always be greater than or equal to the value for "Confirmed" (Suspected >= Confirmed).
-- The value for "Suspected" must always be greater than or equal to the value for "Deaths (Confirmed Cases)" (Suspected >= Deaths).
 - Ensure all extracted numbers are non-negative integers.
-Please carefully verify these logical relationships when extracting the numerical data.
+- Only include numerical values which you see in the image, never create fake data. Include the numbers exactly as you see them in the image, it is very important to maintain accuracy.
+- Treat columns as separate, work row by row and column by column.
+- Numbers within column are right-aligned, make sure you correctly identify which column does a number belong to. You must not confuse the columns. 
 
 "States" corresponds to the states of Nigeria: Ondo, Edo, Bauchi, Taraba, Benue, Ebonyi, Kogi, Kaduna, Plateau, Enugu, Cross River, Rivers, Delta, Nasarawa, Anambra, Gombe, Niger, Imo, Jigawa, Bayelsa, Adamawa, Fct, Katsina, Kano, Oyo, Lagos, Ogun, Yobe, Sokoto, Kebbi, Zamfara, Akwa Ibom, Ekiti, Kwara, Borno, Osun, Abia. These are the correct names, sometimes there may be a typo in the image.
 You should include ONLY the names of the States that you see in the image.

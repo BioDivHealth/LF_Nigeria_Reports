@@ -73,7 +73,7 @@ def filter_comparison_columns(rows):
     Returns:
         list: List of dictionaries with only relevant columns
     """
-    relevant_columns = ["States", "Suspected", "Confirmed", "Deaths (Confirmed Cases)"]
+    relevant_columns = ["States", "Suspected", "Confirmed", "Deaths"]
     filtered_rows = []
     
     for row in rows:
@@ -127,10 +127,10 @@ def validate_logical_consistency(rows):
             is_valid = False
             
         try:
-            deaths = int(row.get("Deaths (Confirmed Cases)", "0").strip() or "0")
+            deaths = int(row.get("Deaths", "0").strip() or "0")
         except ValueError:
             deaths = 0
-            error_messages.append(f"Non-numeric Deaths value in row {i+1} ({row.get('States', 'Unknown')}): {row.get('Deaths (Confirmed Cases)', '')}")
+            error_messages.append(f"Non-numeric Deaths value in row {i+1} ({row.get('States', 'Unknown')}): {row.get('Deaths', '')}")
             is_valid = False
         
         # Check for negative values
@@ -146,7 +146,7 @@ def validate_logical_consistency(rows):
             # Update the row with fixed values
             validated_rows[i]["Suspected"] = str(suspected)
             validated_rows[i]["Confirmed"] = str(confirmed)
-            validated_rows[i]["Deaths (Confirmed Cases)"] = str(deaths)
+            validated_rows[i]["Deaths"] = str(deaths)
         
         # Check rule: Suspected >= Confirmed
         if suspected < confirmed:

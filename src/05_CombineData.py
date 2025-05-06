@@ -23,7 +23,7 @@ import sys
 import time
 
 # --- Configuration ---
-START_YEAR_SHORT = 21 # Use short year format (YY) for directory names
+START_YEAR_SHORT = 20 # Use short year format (YY) for directory names
 END_YEAR_SHORT = 25   # Adjust if needed based on available data or current year
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
