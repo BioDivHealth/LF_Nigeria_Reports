@@ -24,7 +24,10 @@ def main():
     
     base_dir = Path(__file__).parent.parent
     
-    logging.info("Starting one-time upload of all existing data to Backblaze B2...")
+    # Ask if we should skip existing files
+    skip_existing = True  # Default to skipping existing files
+    logging.info("Starting upload of data to Backblaze B2...")
+    logging.info("Files that already exist in the B2 bucket will be skipped.")
     
     # Upload all data directories
     data_dir = base_dir / "data"
@@ -47,8 +50,9 @@ def main():
             # Upload each filtered year directory separately
             for year_dir in filtered_dirs:
                 year_name = year_dir.name
-                logging.info(f"Uploading year {year_name} from {year_dir}...")
-                upload_directory(year_dir, f"lassa-reports/data/raw/year/{year_name}")
+                logging.info(f"Processing year {year_name} from {year_dir}...")
+                results = upload_directory(year_dir, f"lassa-reports/data/raw/year/{year_name}", skip_if_exists=skip_existing)
+                logging.info(f"Year {year_name}: {results['success']} uploaded, {results['skipped']} skipped, {results['failed']} failed")
         
         # Upload processed data (only CSV and PDF folders)
         processed_dir = data_dir / "processed"
@@ -62,8 +66,9 @@ def main():
             for folder_name in target_folders:
                 folder_path = processed_dir / folder_name
                 if folder_path.exists() and folder_path.is_dir():
-                    logging.info(f"Uploading {folder_name} folder from {folder_path}...")
-                    upload_directory(folder_path, f"lassa-reports/data/processed/{folder_name}")
+                    logging.info(f"Processing {folder_name} folder from {folder_path}...")
+                    results = upload_directory(folder_path, f"lassa-reports/data/processed/{folder_name}", skip_if_exists=skip_existing)
+                    logging.info(f"Folder {folder_name}: {results['success']} uploaded, {results['skipped']} skipped, {results['failed']} failed")
                 else:
                     logging.warning(f"Folder {folder_name} not found in {processed_dir}")
 
@@ -71,10 +76,11 @@ def main():
         # Upload documentation
         doc_dir = data_dir / "documentation"
         if doc_dir.exists():
-            logging.info(f"Uploading documentation from {doc_dir}...")
-            upload_directory(doc_dir, "lassa-reports/data/documentation")
+            logging.info(f"Processing documentation from {doc_dir}...")
+            results = upload_directory(doc_dir, "lassa-reports/data/documentation", skip_if_exists=skip_existing)
+            logging.info(f"Documentation: {results['success']} uploaded, {results['skipped']} skipped, {results['failed']} failed")
     
-    logging.info("One-time upload completed!")
+    logging.info("Upload completed! Files that already existed in the bucket were skipped.")
 
 if __name__ == "__main__":
     main()
