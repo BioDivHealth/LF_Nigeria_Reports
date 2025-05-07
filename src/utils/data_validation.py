@@ -7,6 +7,38 @@ tabular data extracted from Lassa fever reports.
 
 import copy
 import logging
+import uuid
+import pandas as pd
+
+def add_uuid_column(df, id_column='id'):
+    """
+    Add (and/or populate) a UUID column.
+
+    Ensures every row has a non‑null UUID. Existing values are kept;
+    new values are generated only for rows where the column is missing,
+    null, or empty.
+    
+    The column is properly typed as a PostgreSQL UUID for better performance and type safety.
+    """
+    import sqlalchemy.dialects.postgresql as pg
+    
+    if id_column not in df.columns:
+        # Create the column first with proper UUID type
+        df[id_column] = pd.Series(dtype='object')
+
+    # Identify rows that still lack a UUID
+    mask = df[id_column].isna() | (df[id_column] == '')
+    
+    # Generate UUID objects, not strings
+    if mask.sum() > 0:
+        df.loc[mask, id_column] = [uuid.uuid4() for _ in range(mask.sum())]
+    
+    # If there are string UUIDs already in the dataframe, convert them to UUID objects
+    str_mask = df[id_column].apply(lambda x: isinstance(x, str))
+    if str_mask.any():
+        df.loc[str_mask, id_column] = df.loc[str_mask, id_column].apply(lambda x: uuid.UUID(x))
+    
+    return df
 
 
 def sort_table_rows(table_rows):

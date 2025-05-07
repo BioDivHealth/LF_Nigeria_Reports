@@ -1,318 +1,460 @@
 #!/usr/bin/env python3
 """
-URL_Sourcing.py: Nigeria Lassa Fever Report URL Scraper and Metadata Manager
+URL_Sourcing.py: Nigeria Lassa Fever Report URL Scraper and Metadata Manager (Supabase Version)
 
-This script scrapes the Nigeria Centre for Disease Control (NCDC) website for 
-Lassa fever outbreak reports, extracts metadata, and manages file status information.
+This script scrapes the Nigeria Centre for Disease Control (NCDC) website for
+Lassa fever outbreak reports, extracts metadata, and manages file status information
+by interacting directly with a Supabase 'website_data' table.
 
 The script:
-1. Scrapes the NCDC website for Lassa fever reports
-2. Standardizes file naming conventions
-3. Extracts and organizes metadata (year, week, etc.) from report names
-4. Updates a central CSV database of report information
-5. Cross-references with file_status.csv to manage broken links, missing files, etc.
-6. Tracks download status and file compatibility
+1. Connects to a Supabase PostgreSQL database.
+2. Fetches existing report identifiers from the 'website_data' table.
+3. Scrapes the NCDC website for Lassa fever reports.
+4. Standardizes file naming conventions and extracts metadata.
+5. Inserts new, unique report information into the 'website_data' table.
+6. (Future steps will include updating records based on a file_status.csv)
 
 Usage:
-    python URL_Sourcing.py
+    python 01_URL_Sourcing.py (ensure DATABASE_URL environment variable is set)
 
 Output:
-    - Updates website_raw_data.csv with report metadata
-    - Logs processing status and errors
+    - Inserts new report metadata into the Supabase 'website_data' table.
+    - Logs processing status and errors.
 
 Dependencies:
-    - requests: For HTTP requests
-    - BeautifulSoup4: For HTML parsing
-    - pathlib: For file path management
-    - csv: For CSV file operations
+    - requests, BeautifulSoup4, pathlib, pandas, SQLAlchemy, psycopg2-binary
 """
 import os
-import re
 import csv
-import shutil
 import requests
 import logging
-from datetime import datetime
 from pathlib import Path
-from bs4 import BeautifulSoup, Comment
+from bs4 import BeautifulSoup
+import pandas as pd
+from utils.data_validation import add_uuid_column
+from utils.db_utils import get_db_engine, push_data_with_upsert, safe_convert_to_int
+from sqlalchemy import text
 
+# Import centralized logging configuration
+try:
+    from utils.logging_config import configure_logging
+except ImportError:
+    from src.utils.logging_config import configure_logging
 # Configure logging
-class NewlineLoggingHandler(logging.StreamHandler):
-    """Custom logging handler that adds a newline after each log entry."""
-    def emit(self, record):
-        super().emit(record)
-        self.stream.write('\n')
-        self.flush()
+configure_logging()
 
-logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s', handlers=[NewlineLoggingHandler()])
+# --- Supabase Configuration ------------------------------
+SUPABASE_TABLE_NAME = 'website_data' 
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
-# Define base paths and constants
+if not DATABASE_URL:
+    logging.error("CRITICAL: DATABASE_URL environment variable not set. Exiting.")
+    exit(1)
+try:
+    engine = get_db_engine(DATABASE_URL)
+    # Test connection
+    with engine.connect() as connection:
+        logging.info("Successfully connected to Supabase.")
+except Exception as e:
+    logging.error(f"CRITICAL: Failed to create SQLAlchemy engine or connect to Supabase: {e}")
+    exit(1)
+# --- End Supabase Configuration ----------------------------
+
+# Define base paths if still needed for file_status.csv or downloaded_dir check by other functions
 BASE_DIR = Path(__file__).parent.parent
-CSV_FILE = BASE_DIR / 'data' / 'documentation' / 'website_raw_data.csv'
-FIELDNAMES = ['year','week','month', 'name', 'download_name','new_name', 'link', 'Broken_Link', 'Downloaded', 'Compatible', 'Recovered', 'Processed']
-
-# Create directories if they don't exist
 documentation_dir = BASE_DIR / 'data' / 'documentation'
-downloaded_dir = BASE_DIR / 'data' / 'raw' / 'downloaded'
-documentation_dir.mkdir(parents=True, exist_ok=True)
-downloaded_dir.mkdir(parents=True, exist_ok=True)
 
-# Website 
+# Ensure documentation_dir exists if file_status.csv is read from there later
+documentation_dir.mkdir(parents=True, exist_ok=True)
+
+# Website
 base_url = "https://ncdc.gov.ng"
 list_page_url = f"{base_url}/diseases/sitreps/?cat=5&name=An%20update%20of%20Lassa%20fever%20outbreak%20in%20Nigeria"
-logging.info(f"Fetching list page: {list_page_url}")
-response = requests.get(list_page_url)
-response.raise_for_status()
-soup = BeautifulSoup(response.text, "html.parser")
 
 # Define function to rename Lassa fever report filenames and extract metadata
 def rename_lassa_file(old_name):
     """
     Standardize Lassa fever report filenames and extract metadata.
-    
-    Takes original filenames from the NCDC website and converts them to a standardized format:
-    Nigeria_DD_MMM_YY_WXX.pdf (e.g., Nigeria_01_Jan_22_W01.pdf)
-    
-    Args:
-        old_name (str): Original filename from the NCDC website
-        
-    Returns:
-        dict: Contains standardized filename and extracted metadata:
-            - full_name: The standardized filename
-            - month_name: Three-letter month abbreviation (Jan, Feb, etc.)
-            - year: Two-digit year
-            - month: Two-digit month number
-            - week: Week number
-            - day: Two-digit day of month
+    Converts original NCDC filenames to a standardized format and extracts date/week info.
+    Returns a dictionary with parsed info or an error flag.
     """
     month_map = {
         "01": "Jan", "02": "Feb", "03": "Mar", "04": "Apr",
         "05": "May", "06": "Jun", "07": "Jul", "08": "Aug",
         "09": "Sep", "10": "Oct", "11": "Nov", "12": "Dec",
     }
+    original_filename_for_logging = old_name
     old_name = old_name.replace(" ", "_")
     parts = old_name.split("_")
+
     if len(parts) < 9:
-        return {'full_name': old_name}
+        logging.warning(f"Could not parse filename: {original_filename_for_logging}, too few parts.")
+        return {'full_name': original_filename_for_logging, 'parse_error': True}
+
     date_str = parts[8]
-    week_str = parts[9].replace(".pdf", "") if parts[9].endswith(".pdf") else ""
+    week_str_raw = parts[9].replace(".pdf", "") if parts[9].endswith(".pdf") else ""
+    
+    # Ensure week_str is just the number, remove 'W' if present
+    week_str = week_str_raw.upper().lstrip('W')
+
     if len(date_str) != 6:
-        return {'full_name': old_name}
-    dd, mm, yy = date_str[:2], date_str[2:4], date_str[4:]
-    month_name = month_map.get(mm, "???")
-    full_name = f"Nigeria_{dd}_{month_name}_{yy}_W{week_str}.pdf"
+        logging.warning(f"Could not parse date string from filename: {original_filename_for_logging}, date_str: {date_str}")
+        return {'full_name': original_filename_for_logging, 'parse_error': True}
+
+    dd_str, mm_str, yy_str = date_str[:2], date_str[2:4], date_str[4:]
+    month_name = month_map.get(mm_str, "???")
+    
+    try:
+        # Always use last two digits for year (e.g., '2025' -> 25, '2021' -> 21)
+        year_int = int(yy_str)
+        week_int = int(week_str) if week_str.isdigit() else None
+        month_int = int(mm_str) if mm_str.isdigit() else None
+        day_int = int(dd_str) if dd_str.isdigit() else None
+    except ValueError as e:
+        logging.warning(f"Could not convert parts of {original_filename_for_logging} to int (yy:{yy_str}, w:{week_str}, m:{mm_str}, d:{dd_str}). Error: {e}")
+        return {'full_name': original_filename_for_logging, 'parse_error': True}
+
+    # Standardized filename
+    # Just use the week number without leading zeros (W1, W2, etc.)
+    week_display = str(week_int) if week_int is not None else 'XX'
+    full_name = f"Nigeria_{dd_str}_{month_name}_{yy_str}_W{week_display}.pdf"
+
     return {
-        'full_name': full_name,
-        'month_name': month_name, 
-        'year': yy,
-        'month': mm,
-        'week': week_str,
-        'day': dd,
+        'full_name': full_name,          # Standardized name for 'new_name' column
+        'month_name': month_name,        # For reference, not a direct DB column usually
+        'year': year_int,                # For 'year' column (bigint, last two digits only)
+        'month': month_int,              # For 'month' column (int, no leading zero)
+        'week': week_int,                # For 'week' column (bigint)
+        'day': day_int,                  # For reference, not typically in 'website_data'
+        'parse_error': False
     }
 
-def save_raw_website_data(soup):
+def save_raw_website_data(soup, db_engine):
     """
-    Extract Lassa fever report data from the NCDC website and save to CSV.
-    
-    Parses the HTML table from the NCDC situation reports page, extracts relevant
-    metadata about each report, and saves it to website_raw_data.csv. Handles both
-    creating a new CSV file and updating an existing one with new records.
-    
-    Args:
-        soup (BeautifulSoup): BeautifulSoup object containing the parsed HTML from the NCDC website
-        
-    Returns:
-        None: Results are written to the CSV_FILE and logged
+    Extracts Lassa fever report data from NCDC website HTML soup,
+    compares with existing 'new_name' entries in Supabase, and inserts new unique reports.
     """
-    raw_data_file = CSV_FILE
-    raw_fieldnames = FIELDNAMES
-
+    try:
+        with db_engine.connect() as connection:
+            existing_new_names = {row[0] for row in connection.execute(
+                text(f"SELECT new_name FROM {SUPABASE_TABLE_NAME} WHERE new_name IS NOT NULL")
+            )}
+            logging.info(f"Fetched {len(existing_new_names)} existing report 'new_name's from Supabase.")
+            existing_downloads = {row[0] for row in connection.execute(
+                text(f"SELECT download_name FROM {SUPABASE_TABLE_NAME} WHERE download_name IS NOT NULL")
+            )}
+            logging.info(f"Fetched {len(existing_downloads)} existing report 'download_name's from Supabase.")
+    except Exception as e:
+        logging.error(f"Error fetching existing report names from Supabase: {e}")
+        logging.warning("Proceeding without knowledge of existing reports. Duplicates might occur if this issue persists.")
+    
     table_body = soup.find("tbody")
     if not table_body:
-        logging.error("Could not find <tbody> on the page.")
+        logging.error("Could not find <tbody> on the page. Cannot parse reports.")
         return
 
     rows = table_body.find_all("tr")
     if not rows:
-        logging.error("No table rows found in <tbody>.")
+        logging.info("No table rows found in <tbody>. No reports to process.")
         return
 
-    new_rows = []
-    for row in rows:
-        cells = row.find_all('td')
+    new_reports_to_insert = []
+    for row_idx, html_row in enumerate(rows):
+        cells = html_row.find_all('td')
         if len(cells) >= 3:
             name_cell = cells[1].get_text(strip=True)
             link_tag = cells[2].find('a', href=True)
             if link_tag:
                 href = link_tag.get('href', '')
-                if href.startswith('/'):
-                    href = f"https://ncdc.gov.ng{href}"
-                download_name = link_tag.get('download', '')
-                download_name = download_name.replace(" ", "_")
-                new_name = rename_lassa_file(download_name)
-                new_rows.append({
-                    'year': new_name.get('year', ''),
-                    'week': new_name.get('week', ''),
-                    'month': new_name.get('month', ''),
-                    'name': name_cell,
-                    'download_name': download_name,
-                    'new_name': new_name.get('full_name', download_name),
-                    'link': href,
-                    'Broken_Link': '',
-                    'Downloaded': '',
-                    'Compatible': '',
-                    'Recovered': '',
-                    'Processed': ''
-                })
+                if href.startswith('/'): # Make URL absolute
+                    href = f"{base_url}{href}"
+                
+                download_name_raw = link_tag.get('download', '')
+                if not download_name_raw:
+                    logging.warning(f"Row {row_idx+1}: Found link but no 'download' attribute. Link: {href}. Text: {link_tag.get_text(strip=True)}. Skipping.")
+                    continue
+                
+                download_name = download_name_raw.replace(" ", "_") # Original filename for 'download_name'
+                name_metadata = rename_lassa_file(download_name_raw) # Pass raw name for parsing
+                
+                if name_metadata.get('parse_error'):
+                    logging.warning(f"Row {row_idx+1}: Skipping report due to parsing error for '{download_name_raw}'.")
+                    continue
 
-    if raw_data_file.exists():
-        existing_combinations = set()
-        existing_download_names = set()
-        with open(raw_data_file, 'r', newline='') as csvfile:
-            reader = csv.DictReader(csvfile)
-            for existing_row in reader:
-                existing_combinations.add((existing_row.get('year', '').strip(), existing_row.get('week', '').strip()))
-                existing_download_names.add(existing_row.get('download_name', '').strip())
-        rows_to_append = [
-            row for row in new_rows
-            if (row.get('year', '').strip(), row.get('week', '').strip()) not in existing_combinations 
-               and row.get('download_name', '').strip() not in existing_download_names
-        ]
-        if rows_to_append:
-            with open(raw_data_file, 'a', newline='') as csvfile:
-                writer = csv.DictWriter(csvfile, fieldnames=raw_fieldnames)
-                writer.writerows(rows_to_append)
-            logging.info(f"Appended {len(rows_to_append)} new rows to {raw_data_file}")
+                current_new_name = name_metadata.get('full_name')
+
+                if current_new_name in existing_new_names:
+                    logging.debug(f"Report '{current_new_name}' already exists in Supabase. Skipping.")
+                    continue
+
+                if download_name in existing_downloads:
+                    logging.debug(f"Download name '{download_name}' already exists in Supabase. Skipping.")
+                    continue
+
+                # Prepare data for Supabase, matching 'website_data' table columns
+                report_data = {
+                    'year': name_metadata.get('year'),           # bigint
+                    'week': name_metadata.get('week'),           # bigint
+                    'month': name_metadata.get('month'),         # double precision
+                    'name': name_cell,                           # text (title from website)
+                    'download_name': download_name,              # text (original filename)
+                    'new_name': current_new_name,                # text (standardized filename, unique constraint)
+                    'link': href,                                # text
+                    # Initialize other fields to None or default as per schema
+                    'broken_link': None, # Or 'N' / FALSE if preferred default
+                    'downloaded': None,
+                    'compatible': None,
+                    'recovered': None,
+                    'processed': None,
+                    'enhanced': None,
+                    'enhanced_name': None,
+                    'combined': None
+                }
+                new_reports_to_insert.append(report_data)
+                existing_new_names.add(current_new_name) # Add to set to avoid duplicates from same scrape batch
         else:
-            logging.info("No new records to append.")
+            logging.warning(f"Row {row_idx+1}: Did not find enough cells (expected >=3, got {len(cells)}). Skipping.")
+
+    if new_reports_to_insert:
+        try:
+            df_new_reports = pd.DataFrame(new_reports_to_insert)
+            df_new_reports = add_uuid_column(df_new_reports, id_column='id')
+            
+            # Use push_data_with_upsert for more robust inserting with conflict handling
+            affected_rows = push_data_with_upsert(
+                engine=engine,
+                df=df_new_reports,
+                table_name=SUPABASE_TABLE_NAME,
+                conflict_cols=['new_name']
+            )
+            
+            logging.info(f"Successfully inserted/updated {affected_rows} reports in Supabase table '{SUPABASE_TABLE_NAME}'.")
+            
+            # Print details of inserted/updated rows
+            for row in df_new_reports.iterrows():
+                logging.info(f"  Inserted/Updated: {row.get('new_name')} (Year: {row.get('year')}, Week: {row.get('week')})")
+        except Exception as e:
+            logging.error(f"Error inserting new reports into Supabase: {e}")
+            logging.error("Data for new reports not saved:")
+            for rep_data in new_reports_to_insert:
+                logging.error(f"  {rep_data.get('new_name')}")
     else:
-        with open(raw_data_file, 'w', newline='') as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=raw_fieldnames)
-            writer.writeheader()
-            writer.writerows(new_rows)
-        logging.info(f"Created file and saved raw website data to {raw_data_file}")
+        logging.info("No new unique reports found on the NCDC website to add to Supabase.")
 
-def process_file_status_update():
+def process_file_status_update(db_engine):
     """
-    Process file_status.csv and update website_raw_data.csv accordingly.
-
-    - For file_status rows where Notes == "wrong_link":
-        Update matching rows in website_raw_data.csv (matched by Year and Week) by setting:
-            'link' to "wrong" and 'Recovered' to "Y".
-
-    - For file_status rows where Notes == "missing_row":
-        If no row in website_raw_data.csv matches the Year and Week, append a new row with:
-            'year': last two digits of Year from file_status,
-            'week': Week from file_status,
-            'name': "An update of Lassa fever outbreak in Nigeria for Week {Week}",
-            'download_name': "none",
-            'new_name': new_name from file_status,
-            and other fields empty.
+    Process file_status.csv and update the Supabase 'website_data' table accordingly.
+    Handles 'wrong_link', 'missing_row', 'Corrupted', and 'Missing' statuses.
+    Uses DataFrames and push_data_with_upsert for consistency instead of direct SQL.
     """
-    documentation_dir = BASE_DIR / 'data' / 'documentation'
     file_status_path = documentation_dir / 'file_status.csv'
-    website_data_path = documentation_dir / 'website_raw_data.csv'
 
-    # Load file_status.csv
+    if not file_status_path.exists():
+        logging.info(f"{file_status_path} not found. Skipping status updates from CSV.")
+        return
+
     try:
-        with open(file_status_path, 'r', newline='') as fs_file:
+        with open(file_status_path, 'r', newline='', encoding='utf-8') as fs_file:
             fs_reader = csv.DictReader(fs_file)
             file_status_rows = list(fs_reader)
     except Exception as e:
         logging.error(f"Error reading {file_status_path}: {e}")
         return
 
-    # Load website_raw_data.csv
-    try:
-        with open(website_data_path, 'r', newline='') as ws_file:
-            ws_reader = csv.DictReader(ws_file)
-            website_fieldnames = ws_reader.fieldnames
-            website_rows = list(ws_reader)
-    except Exception as e:
-        logging.error(f"Error reading {website_data_path}: {e}")
-        return
+    updated_count = 0
+    inserted_count = 0
+    processed_fs_rows = 0
+    
+    # Process each row in the file_status.csv
+    for fs_row in file_status_rows:
+        processed_fs_rows += 1
+        try:
+            # Extract data from the row
+            note = fs_row.get('Notes', '').strip()
+            status = fs_row.get('Status', '').strip()
+            fs_year_str = fs_row.get('Year', '').strip() # e.g., "2023"
+            fs_week_str = fs_row.get('Week', '').strip() # e.g., "1" or "W1"
+            fs_month_str = fs_row.get('Month', '').strip() # e.g., "1" or "Jan"
+            fs_old_name = fs_row.get('old_name', '').strip()
+            fs_new_name = fs_row.get('new_name', '').strip()
+            fs_correct_link = fs_row.get('correct_link', '').strip()
 
-    rows_updated = []
-    # Process file_status rows for both wrong_link and missing_row in one loop
-    for fs in file_status_rows:
-        note = fs.get('Notes', '').strip()
-        status = fs.get('Status', '').strip()
-        fs_year = fs.get('Year', '').strip()
-        fs_week = fs.get('Week', '').strip()
-        fs_year_last2 = fs_year[-2:] if len(fs_year) >= 2 else fs_year
-        fs_old_name = fs.get('old_name', '').strip()
-        fs_new_name = fs.get('new_name', '').strip()
-        fs_correct_link = fs.get('correct_link', '').strip()
+            fs_year_int = safe_convert_to_int(fs_year_str, 'Year')
+            fs_month_int = safe_convert_to_int(fs_month_str, 'Month')
+            fs_week_int = safe_convert_to_int(fs_week_str, 'Week', 'W')
+            
+            if any(val is None for val in [fs_year_int, fs_week_int] if val != ''):
+                continue
 
-        if note == 'wrong_link' and status == 'Found':
-            for row in website_rows:
-                row_year = row.get('year', '').strip()
-                row_week = row.get('week', '').strip()
-                row_download_name = row.get('download_name', '').strip()
+            if note == 'wrong_link' and status == 'Found':
+                if fs_year_int is None or fs_week_int is None:
+                    logging.warning(f"Skipping 'wrong_link' for {fs_row} due to missing year/week.")
+                    continue
+                
+                # First, check if the record exists
+                with db_engine.connect() as check_conn:
+                    where_clause = "year = :p_year AND week = :p_week"
+                    params = {'p_year': fs_year_int, 'p_week': fs_week_int}
+                    
+                    if fs_old_name:
+                        where_clause += " OR download_name = :p_old_name"
+                        params['p_old_name'] = fs_old_name
+                        
+                    check_stmt = text(f"SELECT id, year, week FROM {SUPABASE_TABLE_NAME} WHERE {where_clause} LIMIT 1")
+                    record = check_conn.execute(check_stmt, params).fetchone()
+                
+                if record:
+                    # Create update data
+                    update_data = {
+                        'id': record[0],  # Preserve the existing ID
+                        'year': fs_year_int,
+                        'week': fs_week_int,
+                        'month': fs_month_int,
+                        'broken_link': 'Y',
+                        'recovered': 'Y'
+                    }
+                    
+                    # Add optional fields
+                    if fs_new_name:
+                        update_data['new_name'] = fs_new_name
+                    if fs_correct_link:
+                        update_data['link'] = fs_correct_link
+                    
+                    # Create DataFrame and use push_data_with_upsert
+                    df_update = pd.DataFrame([update_data])
+                    
+                    # Use push_data_with_upsert for consistent handling
+                    rows_affected = push_data_with_upsert(
+                        engine=db_engine,
+                        df=df_update,
+                        table_name=SUPABASE_TABLE_NAME,
+                        conflict_cols=['id']
+                    )
+                    
+                    if rows_affected > 0:
+                        updated_count += rows_affected
+                        logging.debug(f"'wrong_link' status applied for Y{fs_year_str} W{fs_week_str}. Rows affected: {rows_affected}")
 
-                if row_year == fs_year_last2 and row_week == fs_week or (row_download_name == fs_old_name): # This should take care of 2022/2023 instance of Week 53 isntead of W1
-                    row['new_name'] = fs_new_name
-                    row['Broken_Link'] = 'Y'
-                    row['Recovered'] = 'Y'
-                    row['year'] = fs_year_last2
-                    row['week'] = fs_week
-                    row['link'] = fs_correct_link
-                    rows_updated.append(row)
-        elif note == 'missing_row':
-            exists = any(row.get('year', '').strip() == fs_year_last2 and row.get('week', '').strip() == fs_week for row in website_rows)
-            if not exists:
-                new_row = { key: '' for key in website_fieldnames }
-                new_row['year'] = fs_year_last2
-                new_row['week'] = fs_week
-                new_row['name'] = f"An update of Lassa fever outbreak in Nigeria for Week {fs_week}"
-                new_row['download_name'] =  fs.get('old_name', '').strip()
-                new_row['link'] = fs.get('correct_link', '').strip()
-                new_row['new_name'] = fs.get('new_name', '').strip()
-                website_rows.append(new_row)
-                rows_updated.append(new_row)
-        elif status == 'Corrupted':
-            for row in website_rows:
-                row_year = row.get('year', '').strip()
-                row_week = row.get('week', '').strip()
-                if row_year == fs_year_last2 and row_week == fs_week:
-                    row['Compatible'] = 'N'
-                    rows_updated.append(row)
-        elif status == 'Missing':
-            for row in website_rows:
-                row_year = row.get('year', '').strip()
-                row_week = row.get('week', '').strip()
-                if row_year == fs_year_last2 and row_week == fs_week:
-                    row['Broken_Link'] = 'Y'
-                    row['Recovered'] = 'N'
-                    rows_updated.append(row)
+            elif note == 'missing_row':
+                if fs_year_int is None or fs_week_int is None:
+                    logging.warning(f"Skipping 'missing_row' {fs_row} due to missing year/week.")
+                    continue
+                        
+                # Check if record already exists without raw SQL
+                with db_engine.connect() as check_conn:
+                    check_stmt = text(f"SELECT 1 FROM {SUPABASE_TABLE_NAME} WHERE year = :p_year AND week = :p_week LIMIT 1")
+                    exists_result = check_conn.execute(check_stmt, {'p_year': fs_year_int, 'p_week': fs_week_int}).fetchone()
+                    
+                if not exists_result:
+                   
+                    # Create a standardized new_name if one wasn't provided
+                    if not fs_new_name:
+                        fs_new_name = f"Nigeria_XX_XXX_{str(fs_year_int)[-2:]}_W{str(fs_week_int).zfill(2)}_recovered.pdf"
 
-    # New code: update 'Downloaded' field based on files available in the downloaded folder
-    downloaded_dir = BASE_DIR / 'data' / 'raw' / 'downloaded'
-    if downloaded_dir.exists():
-        downloaded_files = {f.name for f in downloaded_dir.iterdir() if f.is_file()}
-        for row in website_rows:
-            if row.get('download_name', '').strip() in downloaded_files:
-                row['Downloaded'] = 'Y'
-                rows_updated.append(row)
+                    # Prepare insert data
+                    insert_data = {
+                        'year': fs_year_int,
+                        'week': fs_week_int,
+                        'month': fs_month_int,
+                        'name': f"An update of Lassa fever outbreak in Nigeria for Week {fs_week_int}", # Generic name
+                        'download_name': fs_old_name if fs_old_name else 'unknown_original_source.pdf',
+                        'new_name': fs_new_name,
+                        'link': fs_correct_link if fs_correct_link else None,
+                        'broken_link': 'N',
+                        'recovered': 'Y'
+                    }
+                    
+                    # Create DataFrame and use push_data_with_upsert for consistent handling
+                    df_insert = pd.DataFrame([insert_data])
+                    # Add UUID using the shared utility
+                    df_insert = add_uuid_column(df_insert, id_column='id')
+                    
+                    # Use push_data_with_upsert for better handling and consistency
+                    # Use 'new_name' as conflict column since it has a unique constraint
+                    rows_affected = push_data_with_upsert(
+                        engine=db_engine,
+                        df=df_insert,
+                        table_name=SUPABASE_TABLE_NAME,
+                        conflict_cols=['new_name']
+                    )
+                    
+                    if rows_affected > 0:
+                        inserted_count += rows_affected
+                        logging.debug(f"'missing_row' inserted for Y{fs_year_str} W{fs_week_str}.")
 
-    if rows_updated:
-        with open(website_data_path, 'w', newline='') as ws_file:
-            writer = csv.DictWriter(ws_file, fieldnames=website_fieldnames)
-            writer.writeheader()
-            writer.writerows(website_rows)
-        logging.info(f"Updated {len(rows_updated)} rows in {website_data_path} based on file_status.csv.")
-    else:
-        logging.info("No rows updated in website_raw_data.csv based on file_status.csv.")
+            elif status == 'Corrupted' or status == 'Missing':
+                if fs_year_int is None or fs_week_int is None:
+                    logging.warning(f"Skipping '{status}' for {fs_row} due to missing year/week.")
+                    continue
+                    
+                # First, check if the record exists
+                with db_engine.connect() as check_conn:
+                    check_stmt = text(f"SELECT id, year, week FROM {SUPABASE_TABLE_NAME} WHERE year = :p_year AND week = :p_week LIMIT 1")
+                    record = check_conn.execute(check_stmt, {'p_year': fs_year_int, 'p_week': fs_week_int}).fetchone()
+                
+                if record:
+                    # Create update data based on status
+                    update_data = {'id': record[0]}  # Preserve the existing ID
+                    
+                    if status == 'Corrupted':
+                        update_data['compatible'] = 'N'
+                    elif status == 'Missing':
+                        update_data['broken_link'] = 'Y'
+                        update_data['recovered'] = 'N'
+                        update_data['downloaded'] = 'N'
+                    
+                    # Create DataFrame and use push_data_with_upsert
+                    df_update = pd.DataFrame([update_data])
+                    
+                    # Use push_data_with_upsert for consistent handling
+                    rows_affected = push_data_with_upsert(
+                        engine=db_engine,
+                        df=df_update,
+                        table_name=SUPABASE_TABLE_NAME,
+                        conflict_cols=['id']
+                    )
+                    
+                    if rows_affected > 0:
+                        updated_count += rows_affected
+                        logging.debug(f"'{status}' status applied for Y{fs_year_str} W{fs_week_str}. Rows affected: {rows_affected}")
+            
+        except Exception as e_row:
+            logging.error(f"Error processing row in file_status.csv: {fs_row}. Error: {e_row}")
+
+    logging.info(f"Processed {processed_fs_rows} rows from file_status.csv.")
+    if updated_count > 0:
+        logging.info(f"Updated {updated_count} records in Supabase based on file_status.csv.")
+    if inserted_count > 0:
+        logging.info(f"Inserted {inserted_count} new records into Supabase based on file_status.csv.")
+    if updated_count == 0 and inserted_count == 0 and processed_fs_rows > 0:
+        logging.info("No records in Supabase were changed based on file_status.csv (either no matches or data was already consistent).")
+
 
 def main():
     """
     Main entry point for the script.
-    
-    Executes the process to save raw website data by scraping the NCDC website.
-    The scraping process extracts Lassa fever report data and saves it to CSV.
+    Fetches NCDC website, scrapes report data, and saves/updates to Supabase.
+    Then processes file_status.csv to further update Supabase records.
     """
-    save_raw_website_data(soup)
+    logging.info(f"Starting 01_URL_Sourcing script...")
+    logging.info(f"Attempting to fetch NCDC list page: {list_page_url}")
+    try:
+        response = requests.get(list_page_url, timeout=60) # Increased timeout
+        response.raise_for_status() # Raises HTTPError for bad responses (4XX or 5XX)
+        soup_content = BeautifulSoup(response.text, "html.parser")
+        logging.info("Successfully fetched and parsed NCDC page.")
+        
+        save_raw_website_data(soup_content, engine) # Scrape and save new entries
+        process_file_status_update(engine)      # Update based on file_status.csv
+
+    except requests.exceptions.Timeout:
+        logging.error(f"Timeout while trying to fetch NCDC page: {list_page_url}")
+    except requests.exceptions.RequestException as e_req:
+        logging.error(f"Failed to fetch NCDC page due to network error: {e_req}")
+    except Exception as e_main:
+        logging.error(f"An unexpected error occurred in main execution: {e_main}", exc_info=True)
+    finally:
+        logging.info("01_URL_Sourcing script finished.")
 
 if __name__ == "__main__":
     main()
-    process_file_status_update()
