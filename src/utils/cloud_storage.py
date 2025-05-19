@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 from b2sdk.v2 import InMemoryAccountInfo, B2Api
 from b2sdk.v2.exception import B2Error
+from typing import Set
 
 def get_b2_api():
     """
@@ -28,6 +29,68 @@ _file_existence_cache = {}
 
 # Cache for file listings to reduce API calls
 _file_listing_cache = {}
+
+def get_b2_file_list() -> Set[str]:
+    """
+    Get a set of all files in the B2 bucket.
+    
+    Returns:
+        Set[str]: Set of all file paths in the B2 bucket
+    """
+    logging.info("Retrieving file list from Backblaze B2...")
+    
+    b2_api = get_b2_api()
+    bucket_name = os.environ.get('B2_BUCKET_NAME')
+    
+    if not bucket_name:
+        logging.error("CRITICAL: B2_BUCKET_NAME environment variable not set.")
+        return set()
+        
+    bucket = b2_api.get_bucket_by_name(bucket_name)
+    
+    # Get all files in the bucket recursively
+    file_set = set()
+    try:
+        for file_info, _ in bucket.ls('', recursive=True):
+            file_set.add(file_info.file_name)
+        
+        logging.info(f"Retrieved {len(file_set)} files from B2 bucket")
+        return file_set
+    except Exception as e:
+        logging.error(f"Error retrieving file list from B2: {e}")
+        return set()
+
+def get_b2_report_filenames(prefix: str, extension: str) -> Set[str]:
+    """
+    Retrieves a set of unique filenames from the B2 bucket,
+    filtering by the specified prefix and extension.
+
+    Args:
+        prefix (str): The prefix to filter files by.
+        extension (str): The file extension to filter files by.
+
+    Returns:
+        Set[str]: A set of filenames (e.g., "Nigeria_DD_Mon_YY_W##.pdf")
+                  found in the B2 bucket under the specified prefix.
+    """
+    logging.info(f"Fetching file list from B2 under prefix: '{prefix}'")
+    try:
+        all_b2_files = get_b2_file_list() # This gets all files in the bucket
+        report_filenames = set()
+        for b2_file_path in all_b2_files:
+            if b2_file_path.startswith(prefix):
+                # Extract the filename part after the prefix
+                filename = os.path.basename(b2_file_path)
+                # Ensure we only add non-empty filenames, that are likely PDFs
+                if filename and filename.endswith(extension):
+                    report_filenames.add(filename)
+        logging.info(f"Found {len(report_filenames)} files in B2 under the prefix '{prefix}'.")
+        if not report_filenames:
+            logging.warning(f"No files found in B2 under prefix '{prefix}'. Check prefix and bucket content.")
+        return report_filenames
+    except Exception as e:
+        logging.error(f"Error fetching or processing B2 file list: {e}")
+        return set() # Return empty set on error
 
 def get_files_in_directory(bucket_obj, directory_prefix):
     """
