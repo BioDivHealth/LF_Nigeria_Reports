@@ -67,28 +67,6 @@ def get_fieldnames():
 
 FIELDNAMES = get_fieldnames()
 
-def download_pdf(pdf_url, download_path):
-    """
-    Download a PDF file from a given URL and save it to the specified path.
-    
-    Args:
-        pdf_url (str): URL of the PDF to download
-        download_path (Path): Destination path where the PDF will be saved
-        
-    Returns:
-        bool: True if download was successful, False otherwise
-    """
-    logging.info(f"Downloading {pdf_url} -> {download_path.name}")
-    try:
-        response = requests.get(pdf_url)
-        response.raise_for_status()
-        download_path.write_bytes(response.content)
-        return True
-    except Exception as e:
-        logging.error(f"Failed to download {pdf_url}: {e}")
-        return False
-
-
 def download_lassa_pdfs():
     """
     Download Lassa fever PDFs based on metadata in the CSV file.
