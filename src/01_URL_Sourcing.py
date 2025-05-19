@@ -231,8 +231,8 @@ def save_raw_website_data(soup, db_engine):
             logging.info(f"Successfully inserted/updated {affected_rows} reports in Supabase table '{SUPABASE_TABLE_NAME}'.")
             
             # Print details of inserted/updated rows
-            for row in df_new_reports.iterrows():
-                logging.info(f"  Inserted/Updated: {row.get('new_name')} (Year: {row.get('year')}, Week: {row.get('week')})")
+            for _, row in df_new_reports.iterrows():
+                logging.info(f"  Inserted/Updated: {row['new_name']} (Year: {row['year']}, Week: {row['week']})")
         except Exception as e:
             logging.error(f"Error inserting new reports into Supabase: {e}")
             logging.error("Data for new reports not saved:")
