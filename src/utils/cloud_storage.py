@@ -242,10 +242,10 @@ def download_file(b2_key, local_path, bucket=None):
         bucket_obj = b2_api.get_bucket_by_name(bucket)
         
         # Download the file
-        download_dest = bucket_obj.download_file_by_name(
-            file_name=b2_key,
-            download_dest=str(local_path)
-        )
+        # The B2 SDK doesn't support the download_dest parameter directly
+        # Instead, we need to use the download_file_to method
+        download_dest = bucket_obj.download_file_by_name(file_name=b2_key)
+        download_dest.save_to(str(local_path))
         
         logging.info(f"Successfully downloaded b2://{bucket}/{b2_key} to {local_path}")
         return True
