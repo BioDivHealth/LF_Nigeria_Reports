@@ -77,6 +77,13 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 B2_PDF_PREFIX = "lassa-reports/data/processed/PDF/"
 B2_RAW_PREFIX = "lassa-reports/data/raw/year/"
 
+# Ensure the prefixes end with a slash
+for prefix_var in ["B2_PDF_PREFIX", "B2_RAW_PREFIX"]:
+    prefix = locals()[prefix_var]
+    if prefix and prefix != '/' and not prefix.endswith('/'):
+        locals()[prefix_var] = prefix + '/'
+
+# DEFINE FILTERING CONDITIONS
 COMMON_YEAR_CONDITION = "(year >= 20 OR year >= '20')"
 COMPATIBILITY_CONDITION = "(compatible IS NULL OR compatible = 'Y' OR compatible != 'N')"
 DOWNLOADED_CONDITION = "downloaded = 'Y'"
@@ -84,15 +91,11 @@ DOWNLOADED_CONDITION = "downloaded = 'Y'"
 # Paths ------------------------------------------------------
 BASE_DIR = Path(__file__).parent.parent
 RAW_FOLDER = BASE_DIR / 'data' / 'raw' / 'year'
+ENHANCED_FOLDER = BASE_DIR / 'data' / 'processed' / 'PDF'
+ENHANCED_FOLDER.mkdir(parents=True, exist_ok=True)
 RAW_FOLDER.mkdir(parents=True, exist_ok=True)
 
-# Ensure the prefixes end with a slash
-for prefix_var in ["B2_PDF_PREFIX", "B2_RAW_PREFIX"]:
-    prefix = locals()[prefix_var]
-    if prefix and prefix != '/' and not prefix.endswith('/'):
-        locals()[prefix_var] = prefix + '/'
-
-# Default enhancement parameters
+# Default enhancement parameters -----------------------------
 DEFAULT_PARAMS = {
     'h1': 40, 's1': 0, 'v1': 210,
     'h2': 50, 's2': 30, 'v2': 255,
@@ -188,47 +191,54 @@ def enhance_table_lines_from_pdf_hq(
  
     # 5. Crop and save image
     # Determine crop boundaries based on year
-    if year in ['20', '21']:
-        # For 2020 and 2021 reports
-        crop_top = max(0, top_boundary - 110)
-        crop_bottom = min(img.shape[0], bottom_boundary + 110)
-    else:  # 2022, 2023, etc.
-        # For 2022+ reports
-        crop_top = max(0, top_boundary - 110)
-        crop_bottom = min(img.shape[0], bottom_boundary + 10)
+    if year == '20':
+        crop_bottom = min(bottom_boundary + 120, img.shape[0])
+        crop_top = top_boundary - 390
+    else:
+        crop_bottom = min(bottom_boundary + 20, img.shape[0])
+        crop_top = top_boundary - 360
     
-    # Crop the image
-    cropped_img = img[crop_top:crop_bottom, :]
+    # Calculate width boundaries for cropping based on year and week
+    width_ratio = 0.59  # Default ratio
     
-    # Save the enhanced image
-    cv2.imwrite(str(output_path), cropped_img)
+    if year == '20':
+        if int(week) >= 25:
+            width_ratio = 0.56
+        elif int(week) in [9, 22]:
+            width_ratio = 0.60
+        elif int(week) in [6]:
+            width_ratio = 0.65
+        elif int(week) in [7, 8]:
+            width_ratio = 0.57
     
+    new_width = int(img.shape[1] * width_ratio)
+    new_width2 = int(img.shape[1] * 0.07)  # Left margin
+    img_cropped = img[crop_top:crop_bottom, new_width2:new_width]
+    
+    output_pil = Image.fromarray(cv2.cvtColor(img_cropped, cv2.COLOR_BGR2RGB))
+    output_pil.save(output_path)
     # Close the PDF document
     doc.close()
-    
     return True
 
-
-def download_pdf_from_b2(b2_filename: str, year: str, temp_dir: Path) -> Optional[Path]:
-    """Download a PDF file from B2 to a local temporary directory.
+def download_file_from_b2(b2_key: str, destination: Path) -> Optional[Path]:
+    """Download a file from B2 to a local temporary directory.
     
     Args:
-        b2_filename: The filename of the PDF in B2
-        year: The year of the report
-        temp_dir: The temporary directory to download to
+        b2_key: The key of the file in B2
+        destination: The destination directory to download to
         
     Returns:
         Path to the downloaded file, or None if download failed
     """
-   
-    b2_key = f"{B2_RAW_PREFIX}{year}/{b2_filename}"
-    local_path = temp_dir / b2_filename
-    
+    b2_filename = os.path.basename(b2_key)
+    logging.info(f"Downloading {b2_filename} from B2 to {destination}")
     try:
-        success = download_file(b2_key, str(local_path))
+        logging.info(f"b2 key is {b2_key}")
+        success = download_file(b2_key, str(destination))
         if success:
             logging.info(f"Successfully downloaded {b2_filename} from B2")
-            return local_path
+            return None
         else:
             logging.error(f"Failed to download {b2_filename} from B2")
             return None
@@ -289,7 +299,7 @@ def update_enhanced_status(engine, report_id: str, enhanced_name: str, status: s
             stmt = text(f"""
                 UPDATE \"{SUPABASE_TABLE_NAME}\"
                 SET enhanced = :status, enhanced_name = :enhanced_name
-                WHERE id = :id::uuid
+                WHERE id = CAST(:id AS uuid)
             """)
             
             session.execute(stmt, {
@@ -303,73 +313,7 @@ def update_enhanced_status(engine, report_id: str, enhanced_name: str, status: s
             session.rollback()
             logging.error(f"Error updating enhanced status for report {report_id}: {e}")
 
-def process_reports_from_supabase(engine):
-    """Process Lassa fever reports based on metadata in Supabase.
-    
-    1. Query Supabase for reports that need enhancement
-    2. Download each PDF from B2
-    3. Enhance the tables
-    4. Upload the enhanced images to B2
-    5. Update Supabase with the enhanced status
-    """
-    reports = get_reports_to_enhance(engine)
-    if not reports:
-        logging.info("No reports to enhance")
-        return
-    
-    # Create a temporary directory for processing
-    with tempfile.TemporaryDirectory() as temp_dir_str:
-        temp_dir = Path(temp_dir_str)
-        temp_output_dir = temp_dir / "enhanced"
-        temp_output_dir.mkdir(exist_ok=True)
-        
-        for report in reports:
-            report_id = report['id']
-            new_name = report['new_name']
-            year = report['year']
-            week = report['week']
-            
-            # Generate enhanced image name
-            enhanced_name = f"Lines_{new_name.replace('.pdf', '')}_page3.png"
-            
-            # Download PDF from B2
-            pdf_path = download_pdf_from_b2(new_name, temp_dir)
-            if not pdf_path:
-                continue
-            
-            # Path for enhanced output
-            output_path = temp_output_dir / enhanced_name
-            
-            try:
-                logging.info(f"Enhancing {new_name} (Year: {year}, Week: {week})")
-                enhance_table_lines_from_pdf_hq(
-                    str(pdf_path), str(output_path),
-                    **DEFAULT_PARAMS, year=year, week=week
-                )
-                
-                if output_path.exists():
-                    # Upload enhanced image to B2
-                    upload_success = upload_enhanced_image_to_b2(output_path, enhanced_name)
-                    
-                    if upload_success:
-                        # Update Supabase
-                        update_enhanced_status(engine, report_id, enhanced_name, 'Y')
-                    else:
-                        logging.error(f"Failed to upload enhanced image for {new_name}")
-                else:
-                    logging.error(f"Failed to enhance {new_name}")
-            
-            except Exception as e:
-                logging.error(f"Error enhancing {new_name}: {e}")
-                continue
-            
-            # Clean up the PDF file to save space
-            try:
-                pdf_path.unlink()
-            except Exception as e:
-                logging.warning(f"Error removing temporary PDF file {pdf_path}: {e}")
-
-def main():
+def process_reports_from_supabase():
     """Main function to process and enhance Lassa fever report tables."""
     logging.info("Starting Lassa fever report table enhancement process")
     
@@ -382,14 +326,6 @@ def main():
     b2_pdfs = get_b2_report_filenames(B2_RAW_PREFIX, ".pdf")
     
     logging.info(f"File names in B2: {b2_pdfs}")
-    # # Get the list of enhanced files from B2
-    # b2_enhanced_filenames = get_b2_report_filenames(B2_ENHANCED_PREFIX, ".png")
-    
-    # # Sync the enhanced status between B2 and Supabase
-    # sync_enhanced_status(engine, b2_enhanced_filenames)
-    
-    # # Process reports that need enhancement
-    # process_reports_from_supabase(engine)
     
     reports = get_reports_to_enhance(engine)
     if not reports:
@@ -397,7 +333,6 @@ def main():
         return
     logging.info(f"Found {len(reports)} reports to enhance")
     logging.info(f"Reports: {reports}")
-    
     
 
     for report in reports:
@@ -407,17 +342,50 @@ def main():
             week = report['week']
             # Generate enhanced image name
             enhanced_name = f"Lines_{new_name.replace('.pdf', '')}_page3.png"
+            output_path = ENHANCED_FOLDER / f"PDFs_Lines_{year}" / enhanced_name
+            if output_path.exists():
+                logging.info(f"Enhanced image {enhanced_name} already exists in {output_path}")
+                update_enhanced_status(engine, report_id, enhanced_name)
+                continue
             if (RAW_FOLDER / str(year) / new_name).exists():
                 logging.info(f"Report {new_name} already exists in {RAW_FOLDER / str(year) / new_name}")
+                try:
+                    logging.info(f"Enhancing {new_name} (Year: {year}, Week: {week})")
+                    upload_success =enhance_table_lines_from_pdf_hq(
+                        str(RAW_FOLDER / str(year) / new_name), str(output_path),
+                        **DEFAULT_PARAMS, year=year, week=week
+                    )
+                    if upload_success:
+                        update_enhanced_status(engine, report_id, enhanced_name)
+                        logging.info(f"Successfully enhanced {new_name} (Year: {year}, Week: {week})")
+                except Exception as e:
+                    logging.error(f"Error enhancing {new_name}: {e}")
+                    continue
+            elif new_name in b2_pdfs:
+                logging.info(f"Report {new_name} exists in B2, can be downloaded")
+                b2_key = f"{B2_RAW_PREFIX}{year}/{new_name}"
+                download_file_from_b2(b2_key, destination=f"{RAW_FOLDER}/{year}/{new_name}")
+                time.sleep(5)
+                try:
+                    logging.info(f"Enhancing {new_name} (Year: {year}, Week: {week})")
+                    upload_success =enhance_table_lines_from_pdf_hq(
+                        str(RAW_FOLDER / str(year) / new_name), str(output_path),
+                        **DEFAULT_PARAMS, year=year, week=week
+                    )
+                    if upload_success:
+                        update_enhanced_status(engine, report_id, enhanced_name)
+                        logging.info(f"Successfully enhanced {new_name} (Year: {year}, Week: {week})")
+                except Exception as e:
+                    logging.error(f"Error enhancing {new_name}: {e}")
+                    continue
             else:
-                if new_name in b2_pdfs:
-                    logging.info(f"Report {new_name} exists in B2, can be downloaded")
-                    download_pdf_from_b2(new_name, str(year), RAW_FOLDER / str(year))
-               
-                
-        
+                logging.info(f"Raw report {new_name} does not exist in B2 or locally")  
+                continue
             
     logging.info("Finished processing reports")
+
+def main():
+    process_reports_from_supabase()
 
 if __name__ == "__main__":
     main()

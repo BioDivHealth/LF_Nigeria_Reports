@@ -97,7 +97,7 @@ def sync_enhanced_status(engine, b2_filenames: Set[str]):
             # 1. Sync Supabase to B2 (identify files marked enhanced in DB but NOT in B2)
             logging.info("Step 1: Syncing Supabase -> B2 (marking DB entries as NOT enhanced if not in B2)...")
             # Using 'enhanced' as text column with value 'Y' instead of boolean
-            stmt_select_enhanced_db = text(f"SELECT id::text, enhanced_name, new_name FROM \"{SUPABASE_TABLE_NAME}\" WHERE enhanced = 'Y' AND {DOWNLOADED_CONDITION} AND {COMMON_YEAR_CONDITION} AND {COMPATIBILITY_CONDITION})")
+            stmt_select_enhanced_db = text(f"SELECT id::text, enhanced_name, new_name FROM \"{SUPABASE_TABLE_NAME}\" WHERE enhanced = 'Y' AND {DOWNLOADED_CONDITION} AND {COMMON_YEAR_CONDITION} AND {COMPATIBILITY_CONDITION}")
             enhanced_in_db = session.execute(stmt_select_enhanced_db).fetchall()
             
             ids_to_mark_not_enhanced: List[str] = []
@@ -225,8 +225,6 @@ def main():
     sync_enhanced_status(engine, b2_report_files)
     
     logging.info("Lassa Fever Report Enhanced Status Synchronizer finished.")
-
-
 
 if __name__ == "__main__":
     main()
