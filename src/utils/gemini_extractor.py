@@ -63,6 +63,7 @@ def extract_table_with_gemini(image_path, model_name):
                 config={
                     "response_mime_type": "application/json",
                     "response_schema": list[TableRow],
+                    "temperature": 0.2
                 }
             )
         elif model_name == "gemini-2.5-flash-preview-04-17":
@@ -75,6 +76,7 @@ def extract_table_with_gemini(image_path, model_name):
                     ),
                     response_mime_type="application/json",
                     response_schema=list[TableRow],
+                    temperature=0.2
                 )
             )
         return True, response
