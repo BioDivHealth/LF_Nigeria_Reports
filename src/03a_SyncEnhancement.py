@@ -17,7 +17,7 @@ It performs the following actions:
 This script DOES NOT download or upload any files. It only updates metadata.
 
 Usage:
-    python src/02_PDF_Download_Supabase.py
+    python src/03_SyncEnhancement.py
     (Ensure B2 and Supabase environment variables are set)
 
 Dependencies:
