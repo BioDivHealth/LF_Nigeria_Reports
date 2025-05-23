@@ -6,6 +6,7 @@ including connecting to databases and performing upserts.
 """
 
 import logging
+import numpy as np
 import pandas as pd
 import uuid
 from sqlalchemy import create_engine, text, MetaData, Table, Column
@@ -52,10 +53,29 @@ def push_data_with_upsert(engine, df, table_name, conflict_cols, batch_size=500)
     
     # Ensure proper UUID type for id column if it exists
     if 'id' in df.columns:
-        # Convert string UUIDs to actual UUID objects
-        str_mask = df['id'].apply(lambda x: isinstance(x, str))
-        if str_mask.any():
-            df.loc[str_mask, 'id'] = df.loc[str_mask, 'id'].apply(lambda x: uuid.UUID(x))
+        # Check the type of the 'id' column
+        column_type = df['id'].dtype
+        
+        # For StringDtype columns, we need to keep the values as strings but validate them
+        if pd.api.types.is_string_dtype(df['id']):
+            # Validate that all values are valid UUIDs without converting
+            str_mask = df['id'].notna() & (df['id'] != '')
+            if str_mask.any():
+                # Just validate the strings are proper UUIDs without changing the type
+                for uuid_str in df.loc[str_mask, 'id']:
+                    try:
+                        uuid.UUID(uuid_str)
+                    except (ValueError, TypeError, AttributeError):
+                        logger.warning(f"Invalid UUID string found: {uuid_str}")
+        else:
+            # For other types, we can convert to UUID objects
+            str_mask = df['id'].apply(lambda x: isinstance(x, str))
+            if str_mask.any():
+                try:
+                    df.loc[str_mask, 'id'] = df.loc[str_mask, 'id'].apply(lambda x: uuid.UUID(x))
+                except TypeError:
+                    logger.warning("Could not convert id values to UUID objects, keeping as strings")
+                    # Continue with the operation as strings
     
     # Define column types mapping
     dtype_map = {}
@@ -116,6 +136,9 @@ def push_data_with_upsert(engine, df, table_name, conflict_cols, batch_size=500)
                     conn.execute(alter_type_sql)
                 except SQLAlchemyError as e:
                     logger.warning(f"Could not convert id column to UUID: {e}")
+    
+    # Replace pd.NA and np.nan with None for SQL compatibility
+    df = df.replace({pd.NA: None, np.nan: None})
     
     # Convert DataFrame to records
     records = df.to_dict(orient='records')
@@ -209,7 +232,6 @@ def ensure_uuid_columns(engine, table_names):
                     logger.info(f"Successfully converted {table_name}.id to UUID type")
                 except Exception as e:
                     logger.error(f"Failed to convert {table_name}.id to UUID: {e}")
-
 
 def get_existing_records(engine, table_name, id_column="id", where_clause=None):
     """

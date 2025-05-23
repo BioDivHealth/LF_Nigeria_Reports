@@ -2,23 +2,29 @@
 """
 Sync Lassa data to online Postgres tables using upsert strategy and UUIDs.
 
-This script reads CSV files with Lassa data and pushes them to Supabase/Postgres
+This script reads individual CSV files with Lassa data and pushes them to Supabase/Postgres
 tables using an upsert strategy (INSERT ... ON CONFLICT UPDATE) to avoid duplicates.
+Each row in the lassa_data table is linked to its corresponding report in the website_data
+table via a report_id foreign key.
+
 UUIDs are used as primary keys, either client-generated or server-generated.
 
-Env vars needed:
-    DATABASE_URL = "postgresql+psycopg2://user:pass@host:port/dbname"
 """
 import os
 import sys
 import logging
 import uuid
+import numpy as np # For np.nan
 import pandas as pd
 from sqlalchemy import create_engine, text, MetaData, Table
 from sqlalchemy.dialects.postgresql import insert
 from pathlib import Path
 import time
 from sqlalchemy.exc import SQLAlchemyError, NoSuchTableError
+from utils.db_utils import push_data_with_upsert
+
+# Define base directory
+BASE_DIR = Path(__file__).parent.parent
 
 def add_uuid_column(df, id_column='id'):
     """
@@ -45,206 +51,201 @@ def load_and_normalize_csv(csv_path):
     df.columns = df.columns.str.lower()
     return df
 
-def push_data_with_upsert(engine, df, table_name, conflict_cols, batch_size=500):
+def push_lassa_data_individually(engine):
     """
-    Generic function to push DataFrame to a table with upsert logic.
-    Uses SQLAlchemy Table reflection and ON CONFLICT DO UPDATE.
-    """
-    logger = logging.getLogger(__name__)
-    metadata = MetaData()
-    # Prepare unique constraint SQL
-    constraint_name = f"uc_{table_name}_{'_'.join(conflict_cols)}"
-    unique_cols_sql = ', '.join([f'"{c}"' for c in conflict_cols])
-    alter_sql = f'ALTER TABLE "{table_name}" ADD CONSTRAINT "{constraint_name}" UNIQUE ({unique_cols_sql});'
-    try:
-        # Reflect existing table and ensure unique constraint
-        table = Table(table_name, metadata, autoload_with=engine)
-        with engine.begin() as conn:
-            try:
-                conn.execute(text(alter_sql))
-            except SQLAlchemyError:
-                pass
-    except NoSuchTableError:
-        # Create empty table and add unique constraint
-        # Check if 'id' column exists in the DataFrame
-        if 'id' in df.columns:
-            # Create table with id as primary key
-            with engine.begin() as conn:
-                # First create the table without primary key
-                df.head(0).to_sql(table_name, engine, index=False, if_exists='replace')
-                # Then add primary key constraint
-                conn.execute(text(f'ALTER TABLE "{table_name}" ADD PRIMARY KEY ("id");'))
-        else:
-            # Create table without primary key
-            df.head(0).to_sql(table_name, engine, index=False)
-            
-        # Add unique constraint
-        with engine.begin() as conn:
-            try:
-                conn.execute(text(alter_sql))
-            except SQLAlchemyError as e:
-                logger.warning(f"Could not add unique constraint: {e}")
-                
-        metadata.reflect(bind=engine, only=[table_name])
-        table = metadata.tables[table_name]
-    records = df.to_dict(orient='records')
-    stmt = insert(table).values(records)
-    # Never overwrite the primary‑key UUID during an upsert
-    update_cols = {
-        col: getattr(stmt.excluded, col)
-        for col in df.columns
-        if col not in conflict_cols + ['id']
-    }
-    stmt = stmt.on_conflict_do_update(index_elements=conflict_cols, set_=update_cols)
-    with engine.begin() as conn:
-        result = conn.execute(stmt)
-    return result.rowcount
-
-def push_lassa_data(engine, csv_path=None):
-    """
-    Push combined Lassa data to the database with upsert strategy.
+    Push individual Lassa data CSVs to the database with upsert strategy.
+    Each row will be linked to its corresponding report in website_data.
     
     Args:
         engine: SQLAlchemy engine
-        csv_path (Path, optional): Path to the CSV file, defaults to latest
+        
+    Returns:
+        int: Number of rows affected
     """
     logger = logging.getLogger(__name__)
-    if csv_path is None:
-        try:
-            csv_path = max(Path("data/documentation").glob("combined_lassa_data_*.csv"))
-        except ValueError:
-            logger.error("No combined_lassa_data CSV file found in data/documentation/")
-            return 0
     
-    logger.info(f"Processing Lassa data from {csv_path}")
-    df = load_and_normalize_csv(csv_path)
-    
-    # Add UUID column and ensure it's a proper UUID object, not a string
-    df = add_uuid_column(df, id_column='id')
-    
-    # Define conflict columns for upsert: year, week, and states
-    conflict_cols = ['year', 'week', 'states']
-    
-    # Ensure conflict_cols exist in DataFrame
-    for col in conflict_cols:
-        if col not in df.columns:
-            logger.error(f"Conflict column '{col}' not found in Lassa data DataFrame. Aborting.")
-            return 0
-    
-    # Explicitly define column types for PostgreSQL
-    from sqlalchemy.dialects.postgresql import UUID
-    dtype_map = {'id': UUID(as_uuid=True)}
-            
-    # Check if table exists
-    with engine.connect() as conn:
-        table_exists = conn.execute(text("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'lassa_reports')")).scalar()
+    # Get a list of processed CSV files
+    csv_dir = Path(BASE_DIR) / "data" / "processed" / "CSV"
+    if not csv_dir.exists():
+        logger.error(f"CSV directory {csv_dir} not found")
+        return 0
         
-        # If table doesn't exist, create it with proper UUID column
-        if not table_exists:
-            logger.info("Creating lassa_reports table with UUID column")
-            # Create table with explicit UUID type
-            df.head(0).to_sql("lassa_reports", engine, if_exists='replace', index=False, dtype=dtype_map)
-            
-            # Add primary key constraint
-            with engine.begin() as conn:
-                conn.execute(text(f'ALTER TABLE "lassa_reports" ADD PRIMARY KEY ("id");'))
+    # Create a map of filename to report_id from website_data
+    report_map = {}
+    with engine.connect() as conn:
+        result = conn.execute(text("""
+            SELECT id, new_name 
+            FROM website_data 
+            WHERE processed = 'Y'
+        """))
+        for row in result:
+            report_id = row[0]
+            filename = row[1]
+            if filename:
+                # Generate the expected CSV name pattern
+                csv_name = f"Lines_{filename.replace('.pdf', '')}_page3.csv"
+                report_map[csv_name] = report_id
     
-    return push_data_with_upsert(engine, df, "lassa_reports", conflict_cols)
+    # Process each CSV file
+    total_affected_rows = 0
+    
+    # Find all CSV files in the processed directory and subdirectories
+    csv_files = []
+    for year_dir in csv_dir.glob("CSV_LF_*_Sorted"):
+        if year_dir.is_dir():
+            csv_files.extend(year_dir.glob("*.csv"))
+    
+    logger.info(f"Found {len(csv_files)} CSV files to process")
+    
+    for csv_file in csv_files:
+        csv_basename = csv_file.name
+        
+        # Check if we have a matching report_id
+        if csv_basename not in report_map:
+            logger.warning(f"No matching report found for {csv_basename}, skipping")
+            continue
+            
+        report_id = report_map[csv_basename]
+        logger.info(f"Processing {csv_basename} with report_id {report_id}")
+        
+        # Load and process the CSV
+        df = load_and_normalize_csv(csv_file)
+        
+        # Add the report_id column to link to website_data
+        df['report_id'] = report_id
+        
+        # Add UUID column if not present
+        df = add_uuid_column(df, id_column='id')
+        
+        # Convert numeric columns to appropriate types before table creation or upsert
+        # Process year column - create both year (2-digit) and full_year (4-digit) versions
+        if 'year' in df.columns:
+            # Convert to numeric first
+            df['year'] = pd.to_numeric(df['year'], errors='coerce')
+            
+            # Create full_year column (preserve original 4-digit year)
+            df['full_year'] = df['year'].copy()
+            
+            # Convert year to 2-digit format (e.g., 2024 -> 24)
+            # Using modulo is more reliable as it handles all numeric types
+            df['year'] = df['year'].apply(lambda x: int(x) % 100 if pd.notna(x) else x).astype('Int64')
+            
+            # Ensure full_year is also properly typed
+            df['full_year'] = df['full_year'].astype('Int64')
+            
+        if 'week' in df.columns:
+            df['week'] = pd.to_numeric(df['week'], errors='coerce').astype('Int64') # Use pandas nullable integer
 
-def push_website_data(engine, csv_path=None):
-    """
-    Push website raw data to the database with upsert strategy.
-    Uses 'Link' as the unique key for conflict resolution.
-    
-    Args:
-        engine: SQLAlchemy engine
-        csv_path (Path, optional): Path to the CSV file
-    """
-    logger = logging.getLogger(__name__)
-    
-    if csv_path is None:
-        # Only look in data/documentation
-        doc_path = Path("data/documentation/website_raw_data.csv")
-        if doc_path.exists():
-            csv_path = doc_path
-        else:
-            logger.warning(f"Website data file not found in {doc_path}")
-            return 0
-    
-    logger.info(f"Processing website data from {csv_path}")
-    df = load_and_normalize_csv(csv_path)
-    
-    # Add UUID if missing and ensure it's a proper UUID object, not a string
-    df = add_uuid_column(df, id_column='id')
-    
-    # Ensure all numeric columns are of appropriate types to avoid PostgreSQL errors
-    # Convert year and week to integers, month to float
-    if 'year' in df.columns:
-        df['year'] = df['year'].astype('int32')  # Use int32 instead of int64
-    if 'week' in df.columns:
-        df['week'] = df['week'].astype('int32')  # Use int32 instead of int64
-    if 'month' in df.columns:
-        df['month'] = df['month'].astype('float32')  # Use float32 instead of float64
-    
-    # Define unique columns for upsert
-    unique_columns = ['new_name']
-    
-    # Explicitly define column types for PostgreSQL
-    from sqlalchemy.dialects.postgresql import UUID, INTEGER, FLOAT
-    dtype_map = {
-        'id': UUID(as_uuid=True),
-        'year': INTEGER(),
-        'week': INTEGER(),
-        'month': FLOAT()
-    }
-    
-    # Check if table exists
-    with engine.connect() as conn:
-        table_exists = conn.execute(text("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'website_data')")).scalar()
+        # Other numeric columns to float (nullable)
+        for col in ['suspected', 'confirmed', 'probable', 'hcw', 'deaths']:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce').astype('float')
         
-        # If table doesn't exist, create it with proper UUID column
-        if not table_exists:
-            logger.info("Creating website_data table with UUID column")
-            # Create table with explicit UUID type
-            df.head(0).to_sql("website_data", engine, if_exists='replace', index=False, dtype=dtype_map)
+        # Define conflict columns for upsert - must match the unique constraint
+        conflict_cols = ['full_year', 'week', 'states']
+        
+        # Ensure conflict_cols exist in DataFrame
+        missing_cols = [col for col in conflict_cols if col not in df.columns]
+        if missing_cols:
+            logger.error(f"Conflict columns {missing_cols} not found in DataFrame for {csv_basename}. Skipping.")
+            continue
+        
+        # Check if table exists and create it if needed
+        with engine.connect() as conn:
+            table_exists = conn.execute(text("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'lassa_data')")).scalar()
             
-            # Add primary key constraint
-            with engine.begin() as conn:
-                conn.execute(text('ALTER TABLE "website_data" ADD PRIMARY KEY ("id");'))
-                logger.info("Added primary key constraint to website_data table")
-    
-    # Check for primary key constraint on existing table
-    has_pk = False
-    with engine.connect() as conn:
-        try:
-            # Check if primary key exists
-            result = conn.execute(text("""
-                SELECT count(*) FROM pg_constraint
-                WHERE conrelid = 'website_data'::regclass
-                AND contype = 'p'
-            """))
-            has_pk = result.scalar() > 0
-        except SQLAlchemyError:
-            # Table might not exist yet
-            pass
-        
-        if not has_pk:
-            try:
-                conn.execute(text('ALTER TABLE "website_data" ADD PRIMARY KEY ("id");'))
-                logger.info("Added primary key constraint to website_data table")
-            except SQLAlchemyError as e:
-                logger.warning(f"Could not add primary key: {e}")
+            # Import PostgreSQL data types
+            from sqlalchemy.dialects.postgresql import UUID, INTEGER, FLOAT, TEXT
+            
+            # If table exists, check if full_year column exists and add it if needed
+            if table_exists:
+                logger.info("Table lassa_data exists, checking for full_year column")
+                full_year_exists = conn.execute(text("""
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.columns 
+                        WHERE table_name = 'lassa_data' AND column_name = 'full_year'
+                    )
+                """)).scalar()
                 
-
-    affected_rows = push_data_with_upsert(
-        engine,  # Pass engine directly
-        df,
-        "website_data",
-        conflict_cols=unique_columns
-    )
+                if not full_year_exists:
+                    logger.info("Adding full_year column to lassa_data table")
+                    try:
+                        # Use a transaction for the ALTER TABLE operation
+                        with engine.begin() as trans_conn:
+                            trans_conn.execute(text('ALTER TABLE "lassa_data" ADD COLUMN "full_year" INTEGER'))
+                        logger.info("Successfully added full_year column")
+                    except SQLAlchemyError as e:
+                        logger.error(f"Error adding full_year column: {e}")
+            # If table doesn't exist, create it with proper columns
+            else:
+                logger.info("Creating lassa_data table with UUID column and report_id foreign key")
+                
+                # Create the table directly using SQLAlchemy's Table and Column objects
+                # This avoids pandas dtype issues with UUID
+                from sqlalchemy import Table, Column, MetaData, String, create_engine
+                from sqlalchemy.schema import CreateTable
+                
+                # Create a metadata instance
+                metadata_obj = MetaData()
+                
+                # Define the table with all columns
+                lassa_table = Table(
+                    'lassa_data', metadata_obj,
+                    Column('id', UUID(as_uuid=True), primary_key=True),
+                    Column('report_id', UUID(as_uuid=True)),
+                    Column('year', INTEGER()),
+                    Column('full_year', INTEGER()),
+                    Column('week', INTEGER()),
+                    Column('suspected', FLOAT()),
+                    Column('confirmed', FLOAT()),
+                    Column('probable', FLOAT()),
+                    Column('hcw', FLOAT()),
+                    Column('deaths', FLOAT()),
+                    # Add any other columns from the DataFrame that aren't in dtype_map
+                    Column('states', String(255)),  # Assuming states is a string column
+                )
+                
+                # Add any other columns from the DataFrame that aren't already defined
+                existing_cols = set([col.name for col in lassa_table.columns])
+                for col_name in df.columns:
+                    if col_name not in existing_cols:
+                        # Basic type inference for other columns
+                        if pd.api.types.is_numeric_dtype(df[col_name]):
+                            # If it contains only integers
+                            if df[col_name].dropna().apply(lambda x: x.is_integer() if pd.notna(x) else True).all():
+                                lassa_table.append_column(Column(col_name, INTEGER()))
+                            else:
+                                lassa_table.append_column(Column(col_name, FLOAT()))
+                        elif pd.api.types.is_datetime64_any_dtype(df[col_name]):
+                            from sqlalchemy import DateTime
+                            lassa_table.append_column(Column(col_name, DateTime()))
+                        else:
+                            lassa_table.append_column(Column(col_name, String(255)))
+                
+                # Create the table
+                with engine.begin() as conn:
+                    conn.execute(CreateTable(lassa_table))
+                
+                # Add foreign key constraint
+                # Primary key is already defined in the table creation
+                with engine.begin() as conn_trans: # Use a transaction for DDL
+                    conn_trans.execute(text('ALTER TABLE "lassa_data" ADD CONSTRAINT fk_report_id FOREIGN KEY (report_id) REFERENCES website_data(id);'))
+                    
+                    # Add unique constraint for conflict columns
+                    unique_constraint = f"ALTER TABLE \"lassa_data\" ADD CONSTRAINT uc_lassa_data_unique UNIQUE (full_year, week, states);"
+                    try:
+                        conn_trans.execute(text(unique_constraint))
+                        logger.info("Added unique constraint on (full_year, week, states)")
+                    except SQLAlchemyError as e:
+                        logger.warning(f"Could not add unique constraint: {e}")
+        
+        # Push data to database
+        affected_rows = push_data_with_upsert(engine, df, "lassa_data", conflict_cols)
+        total_affected_rows += affected_rows
+        logger.info(f"Processed {csv_basename}: {affected_rows} rows affected")
     
-    logger.info(f"Website data: Processed {len(df)} rows, affected {affected_rows} rows")
-    return affected_rows
+    return total_affected_rows
+
 
 def main():
     """
@@ -259,19 +260,13 @@ def main():
     
     # Create engine with the DATABASE_URL
     engine = create_engine(os.environ["DATABASE_URL"])
-    
-    # Ensure both tables have UUID columns
-    from utils.db_utils import ensure_uuid_columns
-    ensure_uuid_columns(engine, ['lassa_reports', 'website_data'])
-    
-    # Push Lassa data
-    lassa_rows = push_lassa_data(engine)
-    
-    # Push website data
-    website_rows = push_website_data(engine)
+     
+    # Push Lassa data individually, linking to website_data
+    lassa_rows = push_lassa_data_individually(engine)
     
     logger.info(f"Database sync completed in {time.time() - start_time:.2f} seconds")
-    logger.info(f"Total affected rows: {lassa_rows + website_rows}")
+    if lassa_rows is not None:
+        logger.info(f"Total affected rows: Lassa data {lassa_rows}")
     
     return 0
 
