@@ -8,8 +8,12 @@ AFC-related logs from the Google Gemini API.
 
 import logging
 
+import sys
 class NewlineLoggingHandler(logging.StreamHandler):
     """Custom logging handler that adds a newline after each log entry and filters AFC logs."""
+    def __init__(self):
+        super().__init__(sys.stderr)  # Send logs to stderr
+
     def filter(self, record):
         return 'afc' not in record.getMessage().lower()
         

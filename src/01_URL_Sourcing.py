@@ -461,86 +461,6 @@ def main():
                 response.raise_for_status()
             return response
 
-        # Strategy 1: Session-based approach with cookies and rotating user agents
-        def fetch_with_session(max_retries=3, backoff_factor=2):
-            user_agents = [
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Safari/605.1.15',
-                'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/119.0'
-            ]
-
-            session = requests.Session()
-
-            # First, visit the homepage to get cookies
-            try:
-                home_headers = {
-                    'User-Agent': user_agents[0],
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-                    'Accept-Language': 'en-US,en;q=0.9',
-                    'Accept-Encoding': 'gzip, deflate, br',
-                    'Connection': 'keep-alive',
-                    'Upgrade-Insecure-Requests': '1'
-                }
-                session.get(base_url, headers=home_headers, timeout=30)
-                logging.info("Successfully visited homepage to establish session")
-            except Exception as e:
-                logging.warning(f"Failed to visit homepage: {e}")
-
-            # Now try to access the target page with retries and rotating user agents
-            for attempt in range(max_retries):
-                try:
-                    user_agent = user_agents[attempt % len(user_agents)]
-                    headers = {
-                        'User-Agent': user_agent,
-                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-                        'Accept-Language': 'en-US,en;q=0.9',
-                        'Accept-Encoding': 'gzip, deflate, br',
-                        'Connection': 'keep-alive',
-                        'Referer': base_url,
-                        'Sec-Fetch-Dest': 'document',
-                        'Sec-Fetch-Mode': 'navigate',
-                        'Sec-Fetch-Site': 'same-origin',
-                        'Sec-Fetch-User': '?1',
-                        'Upgrade-Insecure-Requests': '1',
-                        'Cache-Control': 'max-age=0'
-                    }
-
-                    # Add a delay between retries with exponential backoff
-                    if attempt > 0:
-                        sleep_time = backoff_factor ** attempt
-                        logging.info(f"Retry attempt {attempt+1}/{max_retries}, waiting {sleep_time} seconds...")
-                        time.sleep(sleep_time)
-
-                    logging.info(f"Attempting to fetch with user agent: {user_agent}")
-                    response = session.get(list_page_url, headers=headers, timeout=60)
-                    response.raise_for_status()
-                    return response
-                except requests.exceptions.RequestException as e:
-                    logging.warning(f"Attempt {attempt+1}/{max_retries} failed: {e}")
-                    if attempt == max_retries - 1:
-                        raise
-            raise requests.exceptions.RequestException("All retry attempts failed")
-
-        # Strategy 2: Direct request with delay to avoid rate limiting
-        def fetch_direct():
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.9',
-                'Accept-Encoding': 'gzip, deflate, br',
-                'Connection': 'keep-alive',
-                'Referer': 'https://ncdc.gov.ng/',
-                'Sec-Fetch-Dest': 'document',
-                'Sec-Fetch-Mode': 'navigate',
-                'Sec-Fetch-Site': 'same-origin',
-                'Sec-Fetch-User': '?1',
-                'Upgrade-Insecure-Requests': '1',
-                'Cache-Control': 'no-cache',
-                'Pragma': 'no-cache'
-            }
-            return requests.get(list_page_url, headers=headers, timeout=60)
-
         # Strategy 3: ScraperAPI *endpoint* method (one TLS hop – avoids the proxy‑chain SSL issue)
         def fetch_with_endpoint():
             key = os.environ['SCRAPER_API_KEY'].strip()
@@ -563,8 +483,6 @@ def main():
         strategies = [
             ("endpoint", fetch_with_endpoint),
             ("proxy", fetch_with_proxy)
-            # ("session", fetch_with_session),
-            # ("direct", fetch_direct),
         ]
 
         last_error = None
