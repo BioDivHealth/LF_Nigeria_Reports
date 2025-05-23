@@ -543,14 +543,14 @@ def main():
 
         # Strategy 3: ScraperAPI *endpoint* method (one TLS hop – avoids the proxy‑chain SSL issue)
         def fetch_with_endpoint():
-            key = os.environ['SCRAPER_API_KEY']
+            key = os.environ['SCRAPER_API_KEY'].strip()
             params = {'api_key': key, 'url': list_page_url}
             resp = requests.get('https://api.scraperapi.com/', params=params, timeout=60)
             return _check(resp, "endpoint")
 
         # Strategy 4: Hardened ScraperAPI proxy method (skip SSL validation for broken chains)
         def fetch_with_proxy():
-            key = os.environ['SCRAPER_API_KEY']
+            key = os.environ['SCRAPER_API_KEY'].strip()
             proxy = f"http://scraperapi:{key}@proxy-server.scraperapi.com:8001"
             proxies = {"http": proxy, "https": proxy}
             # The target site’s certificate chain is occasionally incomplete;
