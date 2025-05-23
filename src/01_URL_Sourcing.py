@@ -531,7 +531,7 @@ def main():
             return requests.get(list_page_url, headers=headers, timeout=60)
         
         # Strategy 3: Try using ScraperAPI with direct API endpoint method
-       def fetch_with_proxy():
+        def fetch_with_proxy():
             key = os.environ['SCRAPER_API_KEY']
             proxy = f"http://scraperapi:{key}@proxy-server.scraperapi.com:8001"
             proxies = {"http": proxy, "https": proxy}
