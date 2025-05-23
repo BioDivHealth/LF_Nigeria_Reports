@@ -33,6 +33,16 @@ from pathlib import Path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
+
+# Import centralized logging configuration
+try:
+    from utils.logging_config import configure_logging
+except ImportError:
+    from src.utils.logging_config import configure_logging
+
+# Configure logging
+configure_logging()
+
 # Load environment variables from .env file
 def load_env_file(env_path):
     """Load environment variables from .env file"""
@@ -55,10 +65,6 @@ def load_env_file(env_path):
 # Load environment variables
 env_path = project_root / '.env'
 load_env_file(env_path)
-
-# Replace the current logging setup in main.py with:
-from src.utils.logging_config import configure_logging
-configure_logging()
 
 def import_module_from_file(module_name, file_path):
     """

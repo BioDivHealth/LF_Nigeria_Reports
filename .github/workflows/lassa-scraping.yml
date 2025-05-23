@@ -26,11 +26,6 @@ jobs:
         
     - name: Create data directories
       run: |
-        # Set up basic logging to console
-        logging.basicConfig(
-            level=logging.INFO,
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        )
         mkdir -p data/raw/year
         for y in 20 21 22 23 24 25; do
           mkdir -p data/raw/year/$y
