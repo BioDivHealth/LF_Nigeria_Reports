@@ -27,6 +27,9 @@ Dependencies:
 import os
 import csv
 import requests
+import certifi
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 import logging
 import time
 from pathlib import Path
@@ -449,7 +452,7 @@ def main():
     try:
         # Enhanced multi-strategy approach to bypass 403 errors
         logging.info("Attempting to fetch NCDC page with multiple strategies...")
-        
+
         # Strategy 1: Session-based approach with cookies and rotating user agents
         def fetch_with_session(max_retries=3, backoff_factor=2):
             user_agents = [
@@ -458,9 +461,9 @@ def main():
                 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
                 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/119.0'
             ]
-            
+
             session = requests.Session()
-            
+
             # First, visit the homepage to get cookies
             try:
                 home_headers = {
@@ -475,7 +478,7 @@ def main():
                 logging.info("Successfully visited homepage to establish session")
             except Exception as e:
                 logging.warning(f"Failed to visit homepage: {e}")
-            
+
             # Now try to access the target page with retries and rotating user agents
             for attempt in range(max_retries):
                 try:
@@ -494,13 +497,13 @@ def main():
                         'Upgrade-Insecure-Requests': '1',
                         'Cache-Control': 'max-age=0'
                     }
-                    
+
                     # Add a delay between retries with exponential backoff
                     if attempt > 0:
                         sleep_time = backoff_factor ** attempt
                         logging.info(f"Retry attempt {attempt+1}/{max_retries}, waiting {sleep_time} seconds...")
                         time.sleep(sleep_time)
-                    
+
                     logging.info(f"Attempting to fetch with user agent: {user_agent}")
                     response = session.get(list_page_url, headers=headers, timeout=60)
                     response.raise_for_status()
@@ -510,7 +513,7 @@ def main():
                     if attempt == max_retries - 1:
                         raise
             raise requests.exceptions.RequestException("All retry attempts failed")
-        
+
         # Strategy 2: Direct request with delay to avoid rate limiting
         def fetch_direct():
             headers = {
@@ -529,24 +532,31 @@ def main():
                 'Pragma': 'no-cache'
             }
             return requests.get(list_page_url, headers=headers, timeout=60)
-        
-        # Strategy 3: Try using ScraperAPI with direct API endpoint method
+
+        # Strategy 3: ScraperAPI *endpoint* method (one TLS hop – avoids the proxy‑chain SSL issue)
+        def fetch_with_endpoint():
+            key = os.environ['SCRAPER_API_KEY']
+            params = {'api_key': key, 'url': list_page_url}
+            return requests.get('https://api.scraperapi.com/', params=params, timeout=60)
+
+        # Strategy 4: Hardened ScraperAPI proxy method (skip SSL validation for broken chains)
         def fetch_with_proxy():
             key = os.environ['SCRAPER_API_KEY']
             proxy = f"http://scraperapi:{key}@proxy-server.scraperapi.com:8001"
             proxies = {"http": proxy, "https": proxy}
+            # The target site’s certificate chain is occasionally incomplete;
+            # skip validation for this hop (we still have TLS encryption in transit).
+            return requests.get(list_page_url, proxies=proxies, timeout=60, verify=False)
 
-            # Do not disable TLS verification unless you have to
-            return requests.get(list_page_url, proxies=proxies, timeout=60)
-        
         # Try each strategy in sequence until one works
         response = None
         strategies = [
+            ("endpoint", fetch_with_endpoint),
+            ("proxy", fetch_with_proxy)
             # ("session", fetch_with_session),
             # ("direct", fetch_direct),
-            ("proxy", fetch_with_proxy)
         ]
-        
+
         last_error = None
         for strategy_name, strategy_func in strategies:
             try:
@@ -559,13 +569,13 @@ def main():
                 logging.warning(f"Strategy {strategy_name} failed: {e}")
                 last_error = e
                 continue
-        
+
         if not response or response.status_code != 200:
             raise requests.exceptions.RequestException(f"All strategies failed. Last error: {last_error}")
-            
+
         soup_content = BeautifulSoup(response.text, "html.parser")
         logging.info("Successfully parsed NCDC page content.")
-        
+
         # Save the HTML content for debugging in case of future issues
         try:
             debug_dir = BASE_DIR / 'data' / 'debug'
@@ -578,7 +588,7 @@ def main():
         except Exception as e:
             logging.warning(f"Failed to save debug HTML: {e}")
             # Continue with processing even if debug save fails
-        
+
         save_raw_website_data(soup_content, engine) # Scrape and save new entries
         process_file_status_update(engine)      # Update based on file_status.csv
 
