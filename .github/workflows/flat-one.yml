@@ -1,0 +1,2 @@
+- name: Flat Data
+  uses: githubocto/flat@v3.4.0
