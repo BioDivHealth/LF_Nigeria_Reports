@@ -28,6 +28,7 @@ import os
 import csv
 import requests
 import logging
+import time
 from pathlib import Path
 from bs4 import BeautifulSoup
 import pandas as pd
@@ -446,24 +447,143 @@ def main():
     logging.info(f"Starting 01_URL_Sourcing script...")
     logging.info(f"Attempting to fetch NCDC list page: {list_page_url}")
     try:
-        # Add headers to mimic a browser request and avoid 403 errors
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'Connection': 'keep-alive',
-            'Referer': 'https://ncdc.gov.ng/',
-            'Sec-Fetch-Dest': 'document',
-            'Sec-Fetch-Mode': 'navigate',
-            'Sec-Fetch-Site': 'same-origin',
-            'Sec-Fetch-User': '?1',
-            'Upgrade-Insecure-Requests': '1'
-        }
-        response = requests.get(list_page_url, headers=headers, timeout=60) # Increased timeout with browser headers
-        response.raise_for_status() # Raises HTTPError for bad responses (4XX or 5XX)
+        # Enhanced multi-strategy approach to bypass 403 errors
+        logging.info("Attempting to fetch NCDC page with multiple strategies...")
+        
+        # Strategy 1: Session-based approach with cookies and rotating user agents
+        def fetch_with_session(max_retries=3, backoff_factor=2):
+            user_agents = [
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Safari/605.1.15',
+                'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/119.0'
+            ]
+            
+            session = requests.Session()
+            
+            # First, visit the homepage to get cookies
+            try:
+                home_headers = {
+                    'User-Agent': user_agents[0],
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Accept-Encoding': 'gzip, deflate, br',
+                    'Connection': 'keep-alive',
+                    'Upgrade-Insecure-Requests': '1'
+                }
+                session.get(base_url, headers=home_headers, timeout=30)
+                logging.info("Successfully visited homepage to establish session")
+            except Exception as e:
+                logging.warning(f"Failed to visit homepage: {e}")
+            
+            # Now try to access the target page with retries and rotating user agents
+            for attempt in range(max_retries):
+                try:
+                    user_agent = user_agents[attempt % len(user_agents)]
+                    headers = {
+                        'User-Agent': user_agent,
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                        'Accept-Language': 'en-US,en;q=0.9',
+                        'Accept-Encoding': 'gzip, deflate, br',
+                        'Connection': 'keep-alive',
+                        'Referer': base_url,
+                        'Sec-Fetch-Dest': 'document',
+                        'Sec-Fetch-Mode': 'navigate',
+                        'Sec-Fetch-Site': 'same-origin',
+                        'Sec-Fetch-User': '?1',
+                        'Upgrade-Insecure-Requests': '1',
+                        'Cache-Control': 'max-age=0'
+                    }
+                    
+                    # Add a delay between retries with exponential backoff
+                    if attempt > 0:
+                        sleep_time = backoff_factor ** attempt
+                        logging.info(f"Retry attempt {attempt+1}/{max_retries}, waiting {sleep_time} seconds...")
+                        time.sleep(sleep_time)
+                    
+                    logging.info(f"Attempting to fetch with user agent: {user_agent}")
+                    response = session.get(list_page_url, headers=headers, timeout=60)
+                    response.raise_for_status()
+                    return response
+                except requests.exceptions.RequestException as e:
+                    logging.warning(f"Attempt {attempt+1}/{max_retries} failed: {e}")
+                    if attempt == max_retries - 1:
+                        raise
+            raise requests.exceptions.RequestException("All retry attempts failed")
+        
+        # Strategy 2: Direct request with delay to avoid rate limiting
+        def fetch_direct():
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Connection': 'keep-alive',
+                'Referer': 'https://ncdc.gov.ng/',
+                'Sec-Fetch-Dest': 'document',
+                'Sec-Fetch-Mode': 'navigate',
+                'Sec-Fetch-Site': 'same-origin',
+                'Sec-Fetch-User': '?1',
+                'Upgrade-Insecure-Requests': '1',
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache'
+            }
+            return requests.get(list_page_url, headers=headers, timeout=60)
+        
+        # Strategy 3: Try using a public API proxy (if available in your environment)
+        def fetch_with_proxy():
+            # This is a fallback using a public API proxy service
+            # You may need to sign up for a service like ScrapingBee, ScraperAPI, etc.
+            # For this example, we'll use a hypothetical environment variable for the API key
+            proxy_api_key = os.environ.get('SCRAPING_API_KEY')
+            if not proxy_api_key:
+                logging.warning("No proxy API key found, skipping proxy strategy")
+                return None
+                
+            logging.info("Attempting to fetch using proxy service")
+            # This is just an example - you would replace with actual API call to your chosen service
+            proxy_url = f"https://api.scrapingbee.com/v1/?api_key={proxy_api_key}&url={list_page_url}&render_js=false"
+            return requests.get(proxy_url, timeout=120)
+        
+        # Try each strategy in sequence until one works
+        response = None
+        strategies = [
+            ("session", fetch_with_session),
+            ("direct", fetch_direct),
+            ("proxy", fetch_with_proxy)
+        ]
+        
+        last_error = None
+        for strategy_name, strategy_func in strategies:
+            try:
+                logging.info(f"Trying strategy: {strategy_name}")
+                response = strategy_func()
+                if response and response.status_code == 200:
+                    logging.info(f"Successfully fetched page using strategy: {strategy_name}")
+                    break
+            except Exception as e:
+                logging.warning(f"Strategy {strategy_name} failed: {e}")
+                last_error = e
+                continue
+        
+        if not response or response.status_code != 200:
+            raise requests.exceptions.RequestException(f"All strategies failed. Last error: {last_error}")
+            
         soup_content = BeautifulSoup(response.text, "html.parser")
-        logging.info("Successfully fetched and parsed NCDC page.")
+        logging.info("Successfully parsed NCDC page content.")
+        
+        # Save the HTML content for debugging in case of future issues
+        try:
+            debug_dir = BASE_DIR / 'data' / 'debug'
+            debug_dir.mkdir(parents=True, exist_ok=True)
+            timestamp = time.strftime("%Y%m%d-%H%M%S")
+            debug_file = debug_dir / f"ncdc_page_{timestamp}.html"
+            with open(debug_file, 'w', encoding='utf-8') as f:
+                f.write(response.text)
+            logging.info(f"Saved debug HTML content to {debug_file}")
+        except Exception as e:
+            logging.warning(f"Failed to save debug HTML: {e}")
+            # Continue with processing even if debug save fails
         
         save_raw_website_data(soup_content, engine) # Scrape and save new entries
         process_file_status_update(engine)      # Update based on file_status.csv
