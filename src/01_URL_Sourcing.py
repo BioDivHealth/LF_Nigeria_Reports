@@ -550,8 +550,8 @@ def main():
         # Try each strategy in sequence until one works
         response = None
         strategies = [
-            ("session", fetch_with_session),
-            ("direct", fetch_direct),
+            # ("session", fetch_with_session),
+            # ("direct", fetch_direct),
             ("proxy", fetch_with_proxy)
         ]
         
