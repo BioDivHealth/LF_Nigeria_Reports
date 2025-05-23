@@ -540,18 +540,12 @@ def main():
                 
             logging.info("Attempting to fetch using ScraperAPI service")
             
-            # Configure ScraperAPI parameters
-            payload = {
-                'api_key': scraper_api_key,
-                'url': list_page_url,
-                # 'country_code': 'ng',  # Nigeria country code
-                # 'premium': 'true',     # Use premium proxies for better success rate
-                # 'render': 'true',      # Render JavaScript if needed
-                'max_cost': '1'        # Limit cost per request
+            proxies = {
+                'https': f'scraperapi.max_cost=2:{scraper_api_key}@proxy-server.scraperapi.com:8001'
             }
-            
+
             # Make the request through ScraperAPI
-            return requests.get('https://api.scraperapi.com/', params=payload, timeout=120)
+            return requests.get(list_page_url, proxies=proxies, verify=False)
         
         # Try each strategy in sequence until one works
         response = None
