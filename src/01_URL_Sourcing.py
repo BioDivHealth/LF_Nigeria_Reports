@@ -530,7 +530,7 @@ def main():
             }
             return requests.get(list_page_url, headers=headers, timeout=60)
         
-        # Strategy 3: Try using ScraperAPI as a proxy service - EXACT copy of their example
+        # Strategy 3: Try using ScraperAPI with direct API endpoint method
         def fetch_with_proxy():
             # Get the ScraperAPI key from environment variables
             scraper_api_key = os.environ.get('SCRAPER_API_KEY')
@@ -538,22 +538,26 @@ def main():
                 logging.warning("No SCRAPER_API_KEY environment variable found, skipping proxy strategy")
                 return None
                 
-            logging.info("Using ScraperAPI with exact code from their example")
-            
-            # EXACT copy of their example code with minimal changes
-            proxies = {
-                "https": f"scraperapi.max_cost=2:{scraper_api_key}@proxy-server.scraperapi.com:8001"
-            }
+            logging.info("Using ScraperAPI direct API endpoint method")
             
             try:
-                # Make the request exactly as shown in their example
-                response = requests.get(
-                    list_page_url, 
-                    proxies=proxies, 
-                    verify=False
-                )
+                # Use the direct API endpoint method (more reliable in CI/CD environments)
+                api_url = 'https://api.scraperapi.com'
+                params = {
+                    'api_key': scraper_api_key,
+                    'url': list_page_url,
+                    'keep_headers': 'true',
+                    'premium': 'true'
+                }
+                
+                logging.info(f"Making request to ScraperAPI endpoint with key: {scraper_api_key[:4]}...")
+                response = requests.get(api_url, params=params, timeout=120)
                 
                 logging.info(f"ScraperAPI response status code: {response.status_code}")
+                
+                # Print response headers for debugging
+                logging.info(f"Response headers: {dict(response.headers)}")
+                
                 return response
                 
             except Exception as e:
