@@ -10,3 +10,5 @@ b2sdk>=2.8.1
 google-generativeai>=0.8.4
 google-genai>=1.12.1
 opencv-python>=4.11.0.86
+PyMuPDF>=1.22.5
+python-dotenv>=1.0.0
