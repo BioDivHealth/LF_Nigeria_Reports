@@ -46,8 +46,18 @@ try:
     from utils.db_utils import get_db_engine
     from utils.logging_config import configure_logging
     import importlib.util
-    # Import the sync_enhanced_status function from 03_SyncEnhancement
-    spec = importlib.util.spec_from_file_location("sync_module", "src/03_SyncEnhancement.py")
+    # Import the sync_enhanced_status function from 03a_SyncEnhancement.py
+    spec = importlib.util.spec_from_file_location("sync_module", "src/03a_SyncEnhancement.py")
+except ImportError:
+    from src.utils.cloud_storage import get_b2_file_list
+    from src.utils.cloud_storage import download_file
+    from src.utils.cloud_storage import upload_file
+    from src.utils.cloud_storage import get_b2_report_filenames
+    from src.utils.db_utils import get_db_engine
+    from src.utils.logging_config import configure_logging
+    import importlib.util
+    # Import the sync_enhanced_status function from 03a_SyncEnhancement.py
+    spec = importlib.util.spec_from_file_location("sync_module", "src/03a_SyncEnhancement.py")
     sync_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(sync_module)
     sync_enhanced_status = sync_module.sync_enhanced_status

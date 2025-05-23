@@ -252,7 +252,7 @@ def get_existing_records(engine, table_name, id_column="id", where_clause=None):
         
     with engine.connect() as connection:
         result = connection.execute(text(query))
-        return set(row[0] for row in result if row[0] is not None)
+        return set(str(row[0]) for row in result if row[0] is not None)
 
 def safe_convert_to_int(value_str, field_name, strip_prefix=None):
     if not value_str:

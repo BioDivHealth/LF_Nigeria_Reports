@@ -291,56 +291,60 @@ def upload_directory(directory, b2_prefix=None, file_extensions=None, skip_if_ex
     Returns:
         dict: Summary of upload results
     """
+    import time
+    start_time = time.time()
     directory = Path(directory)
     if not directory.exists():
         logging.error(f"Directory not found: {directory}")
         return {"success": 0, "failed": 0, "total": 0, "skipped": 0}
     
+    logging.info(f"Scanning directory {directory} for files to upload...")
     all_files = scan_directory(directory, file_extensions)
     total_files = len(all_files)
+    logging.info(f"Found {total_files} files to process")
+    
+    if total_files == 0:
+        logging.info(f"No files to upload from {directory}")
+        return {"success": 0, "failed": 0, "total": 0, "skipped": 0}
     
     # Initialize B2 client and bucket once to reuse
-    b2_api = None
-    bucket_obj = None
+    b2_api = get_b2_api()
+    bucket_name = os.environ.get('B2_BUCKET_NAME')
+    bucket_obj = b2_api.get_bucket_by_name(bucket_name)
     
     # Process files in batches
     results = {"success": 0, "failed": 0, "total": total_files, "skipped": 0}
     
-    # Clear the file listing cache for this directory prefix
-    global _file_listing_cache
-    if b2_prefix:
-        if b2_prefix in _file_listing_cache:
-            del _file_listing_cache[b2_prefix]
+    # Pre-fetch all existing files in the target prefix if we're skipping existing files
+    existing_files_set = set()
+    if skip_if_exists:
+        logging.info(f"Pre-fetching existing files to optimize uploads...")
+        fetch_start = time.time()
+        
+        # Use the existing get_b2_file_list function to get all files in the bucket
+        if b2_prefix:
+            # If we have a prefix, filter the results to only include files with that prefix
+            all_b2_files = get_b2_file_list()
+            for file_path in all_b2_files:
+                if file_path.startswith(b2_prefix):
+                    existing_files_set.add(file_path)
+                    # Also update the existence cache
+                    _file_existence_cache[file_path] = True
+        else:
+            # If no prefix, get all files
+            existing_files_set = get_b2_file_list()
+            # Update cache for all files
+            for file_path in existing_files_set:
+                _file_existence_cache[file_path] = True
+        
+        logging.info(f"Found {len(existing_files_set)} existing files in B2 (took {time.time() - fetch_start:.2f}s)")
     
+    # Process files in batches
     for i in range(0, total_files, batch_size):
+        batch_start = time.time()
         batch = all_files[i:i+batch_size]
         logging.info(f"Processing batch {i//batch_size + 1}/{(total_files + batch_size - 1)//batch_size} "
                      f"({len(batch)} files, {i}/{total_files} processed so far)")
-        
-        # Initialize B2 client and bucket if not already done
-        if b2_api is None:
-            b2_api = get_b2_api()
-            bucket_name = os.environ.get('B2_BUCKET_NAME')
-            bucket_obj = b2_api.get_bucket_by_name(bucket_name)
-        
-        # Pre-fetch file listings for directories in this batch to reduce API calls
-        if skip_if_exists:
-            directories = set()
-            for local_path in batch:
-                rel_path = local_path.relative_to(directory)
-                if b2_prefix:
-                    b2_key = f"{b2_prefix}/{rel_path}"
-                else:
-                    b2_key = str(rel_path)
-                
-                # Get the directory part
-                dir_part = '/'.join(b2_key.split('/')[:-1])
-                if dir_part:
-                    directories.add(dir_part)
-            
-            # Fetch file listings for all directories in this batch
-            for dir_prefix in directories:
-                get_files_in_directory(bucket_obj, dir_prefix)
         
         # Process each file in the batch
         for local_path in batch:
@@ -351,13 +355,10 @@ def upload_directory(directory, b2_prefix=None, file_extensions=None, skip_if_ex
             else:
                 b2_key = str(rel_path)
             
-            # Check if file exists (using our cached data)
-            if skip_if_exists:
-                exists, _ = file_exists_in_bucket(bucket_obj, b2_key)
-                if exists:
-                    logging.info(f"Skipping upload for {local_path} - already exists in bucket")
-                    results["skipped"] += 1
-                    continue
+            # Check if file exists using our pre-fetched set
+            if skip_if_exists and b2_key in existing_files_set:
+                results["skipped"] += 1
+                continue
             
             # Upload the file
             try:
@@ -366,19 +367,29 @@ def upload_directory(directory, b2_prefix=None, file_extensions=None, skip_if_ex
                     file_name=b2_key,
                     content_type='b2/x-auto'
                 )
-                logging.info(f"Successfully uploaded {local_path} to bucket/{b2_key}")
                 results["success"] += 1
-                # Update the cache
+                # Update the cache and our set
                 _file_existence_cache[b2_key] = True
+                existing_files_set.add(b2_key)
             except B2Error as e:
                 logging.error(f"Upload failed for {local_path}: {str(e)}")
                 results["failed"] += 1
+        
+        # Log batch completion with timing
+        batch_time = time.time() - batch_start
+        batch_size_actual = len(batch)
+        files_per_second = batch_size_actual / batch_time if batch_time > 0 else 0
+        logging.info(f"Batch completed in {batch_time:.2f}s ({files_per_second:.2f} files/s). "
+                    f"Progress: {i + batch_size_actual}/{total_files} files processed")
         
         # Add delay between batches to avoid hitting API limits
         if i + batch_size < total_files and delay_seconds > 0:
             logging.info(f"Pausing for {delay_seconds} seconds to avoid API limits...")
             time.sleep(delay_seconds)
     
+    total_time = time.time() - start_time
+    avg_speed = total_files / total_time if total_time > 0 else 0
+    logging.info(f"Upload completed in {total_time:.2f}s ({avg_speed:.2f} files/s)")
     logging.info(f"Processed {results['total']} files from {directory}: "
                  f"{results['success']} uploaded, {results['skipped']} skipped, {results['failed']} failed")
     return results

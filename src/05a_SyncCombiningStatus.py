@@ -306,6 +306,7 @@ def sync_combining_status(engine):
     
     # Find reports that are in lassa_data but not marked as combined
     for csv_name, (report_id, _, _, combined) in report_map.items():
+        logging.info(f"Checking report {report_id} (CSV: {csv_name})")
         if report_id in reports_in_lassa_data and combined != 'Y':
             ids_to_mark_combined.append(report_id)
             logging.info(f"Report {report_id} (CSV: {csv_name}) is in lassa_data but not marked as combined")

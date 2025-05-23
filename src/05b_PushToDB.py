@@ -21,27 +21,33 @@ from sqlalchemy.dialects.postgresql import insert
 from pathlib import Path
 import time
 from sqlalchemy.exc import SQLAlchemyError, NoSuchTableError
-from utils.db_utils import push_data_with_upsert
+# Handle imports for both standalone execution and execution from main.py
+try:
+    from utils.db_utils import push_data_with_upsert
+    from utils.data_validation import add_uuid_column
+except ImportError:
+    from src.utils.db_utils import push_data_with_upsert
+    from src.utils.data_validation import add_uuid_column
 
 # Define base directory
 BASE_DIR = Path(__file__).parent.parent
 
-def add_uuid_column(df, id_column='id'):
-    """
-    Add (and/or populate) a UUID column.
+# def add_uuid_column(df, id_column='id'):
+#     """
+#     Add (and/or populate) a UUID column.
 
-    Ensures every row has a non‑null UUID. Existing values are kept;
-    new values are generated only for rows where the column is missing,
-    null, or empty.
-    """
-    if id_column not in df.columns:
-        # Create the column first so we can assign into it
-        df[id_column] = pd.Series(dtype='string')
+#     Ensures every row has a non‑null UUID. Existing values are kept;
+#     new values are generated only for rows where the column is missing,
+#     null, or empty.
+#     """
+#     if id_column not in df.columns:
+#         # Create the column first so we can assign into it
+#         df[id_column] = pd.Series(dtype='string')
 
-    # Identify rows that still lack a UUID
-    mask = df[id_column].isna() | (df[id_column] == '')
-    df.loc[mask, id_column] = [str(uuid.uuid4()) for _ in range(mask.sum())]
-    return df
+#     # Identify rows that still lack a UUID
+#     mask = df[id_column].isna() | (df[id_column] == '')
+#     df.loc[mask, id_column] = [str(uuid.uuid4()) for _ in range(mask.sum())]
+#     return df
 
 def load_and_normalize_csv(csv_path):
     """

@@ -31,8 +31,13 @@ import logging
 from pathlib import Path
 from bs4 import BeautifulSoup
 import pandas as pd
-from utils.data_validation import add_uuid_column
-from utils.db_utils import get_db_engine, push_data_with_upsert, safe_convert_to_int
+# Handle imports for both standalone execution and execution from main.py
+try:
+    from utils.data_validation import add_uuid_column
+    from utils.db_utils import get_db_engine, push_data_with_upsert, safe_convert_to_int
+except ImportError:
+    from src.utils.data_validation import add_uuid_column
+    from src.utils.db_utils import get_db_engine, push_data_with_upsert, safe_convert_to_int
 from sqlalchemy import text
 
 # Import centralized logging configuration
@@ -48,8 +53,10 @@ SUPABASE_TABLE_NAME = 'website_data'
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
 if not DATABASE_URL:
-    logging.error("CRITICAL: DATABASE_URL environment variable not set. Exiting.")
-    exit(1)
+    logging.error("CRITICAL: DATABASE_URL environment variable not set.")
+    # Raise an exception instead of calling exit(1) directly
+    # This allows the main.py error handling to catch it
+    raise EnvironmentError("DATABASE_URL environment variable not set")
 try:
     engine = get_db_engine(DATABASE_URL)
     # Test connection
