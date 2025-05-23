@@ -26,8 +26,10 @@ jobs:
         
     - name: Create data directories
       run: |
-        mkdir -p data/raw
-        mkdir -p data/processed
+        mkdir -p data/raw/year
+        mkdir -p data/processed/CSV
+        mkdir -p data/processed/PDF
+        mkdir -p data/processed/PDF_Lines_Tables
         mkdir -p data/documentation
         
     - name: Run Lassa Reports Scraping Pipeline
