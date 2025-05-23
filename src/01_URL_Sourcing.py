@@ -530,20 +530,28 @@ def main():
             }
             return requests.get(list_page_url, headers=headers, timeout=60)
         
-        # Strategy 3: Try using a public API proxy (if available in your environment)
+        # Strategy 3: Try using ScraperAPI as a proxy service
         def fetch_with_proxy():
-            # This is a fallback using a public API proxy service
-            # You may need to sign up for a service like ScrapingBee, ScraperAPI, etc.
-            # For this example, we'll use a hypothetical environment variable for the API key
-            proxy_api_key = os.environ.get('SCRAPING_API_KEY')
-            if not proxy_api_key:
-                logging.warning("No proxy API key found, skipping proxy strategy")
+            # Get the ScraperAPI key from environment variables
+            scraper_api_key = os.environ.get('SCRAPER_API_KEY')
+            if not scraper_api_key:
+                logging.warning("No SCRAPER_API_KEY environment variable found, skipping proxy strategy")
                 return None
                 
-            logging.info("Attempting to fetch using proxy service")
-            # This is just an example - you would replace with actual API call to your chosen service
-            proxy_url = f"https://api.scrapingbee.com/v1/?api_key={proxy_api_key}&url={list_page_url}&render_js=false"
-            return requests.get(proxy_url, timeout=120)
+            logging.info("Attempting to fetch using ScraperAPI service")
+            
+            # Configure ScraperAPI parameters
+            payload = {
+                'api_key': scraper_api_key,
+                'url': list_page_url,
+                # 'country_code': 'ng',  # Nigeria country code
+                # 'premium': 'true',     # Use premium proxies for better success rate
+                # 'render': 'true',      # Render JavaScript if needed
+                'max_cost': '1'        # Limit cost per request
+            }
+            
+            # Make the request through ScraperAPI
+            return requests.get('https://api.scraperapi.com/', params=payload, timeout=120)
         
         # Try each strategy in sequence until one works
         response = None
