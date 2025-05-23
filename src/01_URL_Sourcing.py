@@ -453,6 +453,14 @@ def main():
         # Enhanced multi-strategy approach to bypass 403 errors
         logging.info("Attempting to fetch NCDC page with multiple strategies...")
 
+        # Helper to check response and log body on error
+        def _check(response, name):
+            if response.status_code != 200:
+                snippet = response.text[:200].replace("\n", " ")
+                logging.warning(f"{name} returned {response.status_code}: {snippet}")
+                response.raise_for_status()
+            return response
+
         # Strategy 1: Session-based approach with cookies and rotating user agents
         def fetch_with_session(max_retries=3, backoff_factor=2):
             user_agents = [
@@ -537,7 +545,8 @@ def main():
         def fetch_with_endpoint():
             key = os.environ['SCRAPER_API_KEY']
             params = {'api_key': key, 'url': list_page_url}
-            return requests.get('https://api.scraperapi.com/', params=params, timeout=60)
+            resp = requests.get('https://api.scraperapi.com/', params=params, timeout=60)
+            return _check(resp, "endpoint")
 
         # Strategy 4: Hardened ScraperAPI proxy method (skip SSL validation for broken chains)
         def fetch_with_proxy():
@@ -546,7 +555,8 @@ def main():
             proxies = {"http": proxy, "https": proxy}
             # The target site’s certificate chain is occasionally incomplete;
             # skip validation for this hop (we still have TLS encryption in transit).
-            return requests.get(list_page_url, proxies=proxies, timeout=60, verify=False)
+            resp = requests.get(list_page_url, proxies=proxies, timeout=60, verify=False)
+            return _check(resp, "proxy")
 
         # Try each strategy in sequence until one works
         response = None
@@ -568,6 +578,7 @@ def main():
             except Exception as e:
                 logging.warning(f"Strategy {strategy_name} failed: {e}")
                 last_error = e
+                logging.debug(f"{strategy_name} exception detail: {e}", exc_info=True)
                 continue
 
         if not response or response.status_code != 200:
