@@ -538,14 +538,47 @@ def main():
                 logging.warning("No SCRAPER_API_KEY environment variable found, skipping proxy strategy")
                 return None
                 
-            logging.info("Attempting to fetch using ScraperAPI service")
+            logging.info(f"Attempting to fetch using ScraperAPI service with key: {scraper_api_key[:4]}...")
             
-            proxies = {
-                'https': f'scraperapi.max_cost=2:{scraper_api_key}@proxy-server.scraperapi.com:8001'
-            }
-
-            # Make the request through ScraperAPI
-            return requests.get(list_page_url, proxies=proxies, verify=False)
+            try:
+                # Try direct API endpoint method first (more reliable in CI/CD environments)
+                api_url = 'https://api.scraperapi.com'
+                params = {
+                    'api_key': scraper_api_key,
+                    'url': list_page_url,
+                    'country_code': 'us',
+                    'render': 'true'
+                }
+                
+                logging.info("Using ScraperAPI direct endpoint method")
+                response = requests.get(api_url, params=params, timeout=120)
+                
+                if response.status_code == 200:
+                    logging.info(f"ScraperAPI direct endpoint method succeeded with status code: {response.status_code}")
+                    return response
+                else:
+                    logging.warning(f"ScraperAPI direct endpoint method failed with status code: {response.status_code}")
+                    
+                # If direct method fails, try proxy method as fallback
+                logging.info("Falling back to ScraperAPI proxy method")
+                proxies = {
+                    'http': f'http://{scraper_api_key}:@proxy-server.scraperapi.com:8001',
+                    'https': f'http://{scraper_api_key}:@proxy-server.scraperapi.com:8001'
+                }
+                
+                # Add headers for proxy request
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                }
+                
+                # Make the request through ScraperAPI proxy
+                response = requests.get(list_page_url, proxies=proxies, headers=headers, verify=False, timeout=120)
+                logging.info(f"ScraperAPI proxy method response status code: {response.status_code}")
+                return response
+                
+            except Exception as e:
+                logging.error(f"ScraperAPI request failed with exception: {e}", exc_info=True)
+                return None
         
         # Try each strategy in sequence until one works
         response = None
