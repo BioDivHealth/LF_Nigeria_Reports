@@ -446,7 +446,21 @@ def main():
     logging.info(f"Starting 01_URL_Sourcing script...")
     logging.info(f"Attempting to fetch NCDC list page: {list_page_url}")
     try:
-        response = requests.get(list_page_url, timeout=60) # Increased timeout
+        # Add headers to mimic a browser request and avoid 403 errors
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Referer': 'https://ncdc.gov.ng/',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'same-origin',
+            'Sec-Fetch-User': '?1',
+            'Upgrade-Insecure-Requests': '1'
+        }
+        response = requests.get(list_page_url, headers=headers, timeout=60) # Increased timeout with browser headers
         response.raise_for_status() # Raises HTTPError for bad responses (4XX or 5XX)
         soup_content = BeautifulSoup(response.text, "html.parser")
         logging.info("Successfully fetched and parsed NCDC page.")
