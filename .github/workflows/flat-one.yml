@@ -17,3 +17,4 @@ jobs:
         with:
           http_url: https://ncdc.gov.ng/diseases/sitreps/?cat=5&name=An%20update%20of%20Lassa%20fever%20outbreak%20in%20Nigeria
           downloaded_filename: data/raw/ncdc_lassa_page.html
+          axios_config: .github/configs/axios_config.json
