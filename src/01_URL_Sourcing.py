@@ -33,6 +33,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 import logging
 import time
 import cloudscraper
+from cloudscraper import create_scraper
 from pathlib import Path
 from bs4 import BeautifulSoup
 import pandas as pd
@@ -85,6 +86,7 @@ list_page_url = f"{base_url}/diseases/sitreps/?cat=5&name=An%20update%20of%20Las
 
 import logging
 import re
+
 def fetch_with_cloudscraper(url: str) -> str:
     """
     Fetch HTML using cloudscraper, which solves Cloudflare IUAM challenges automatically.
