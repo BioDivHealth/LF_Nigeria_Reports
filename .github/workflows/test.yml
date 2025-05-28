@@ -38,9 +38,3 @@ jobs:
         
         # Run the actual script
         python src/00_test.py
-        
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v3
-      with:
-        name: lassa-sitreps
-        path: lassa_sitreps.html
