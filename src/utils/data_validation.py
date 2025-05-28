@@ -10,6 +10,7 @@ import logging
 import uuid
 import pandas as pd
 
+
 def add_uuid_column(df, id_column='id'):
     """
     Add (and/or populate) a UUID column.
@@ -197,3 +198,60 @@ def validate_logical_consistency(rows):
             validated_rows[i]["Confirmed"] = str(deaths)
     
     return is_valid, validated_rows, error_messages
+
+def rename_lassa_file(old_name):
+    """
+    Standardize Lassa fever report filenames and extract metadata.
+    Converts original NCDC filenames to a standardized format and extracts date/week info.
+    Returns a dictionary with parsed info or an error flag.
+    """
+    month_map = {
+        "01": "Jan", "02": "Feb", "03": "Mar", "04": "Apr",
+        "05": "May", "06": "Jun", "07": "Jul", "08": "Aug",
+        "09": "Sep", "10": "Oct", "11": "Nov", "12": "Dec",
+    }
+    original_filename_for_logging = old_name
+    old_name = old_name.replace(" ", "_")
+    parts = old_name.split("_")
+
+    if len(parts) < 9:
+        logging.warning(f"Could not parse filename: {original_filename_for_logging}, too few parts.")
+        return {'full_name': original_filename_for_logging, 'parse_error': True}
+
+    date_str = parts[8]
+    week_str_raw = parts[9].replace(".pdf", "") if parts[9].endswith(".pdf") else ""
+    
+    # Ensure week_str is just the number, remove 'W' if present
+    week_str = week_str_raw.upper().lstrip('W')
+
+    if len(date_str) != 6:
+        logging.warning(f"Could not parse date string from filename: {original_filename_for_logging}, date_str: {date_str}")
+        return {'full_name': original_filename_for_logging, 'parse_error': True}
+
+    dd_str, mm_str, yy_str = date_str[:2], date_str[2:4], date_str[4:]
+    month_name = month_map.get(mm_str, "???")
+    
+    try:
+        # Always use last two digits for year (e.g., '2025' -> 25, '2021' -> 21)
+        year_int = int(yy_str)
+        week_int = int(week_str) if week_str.isdigit() else None
+        month_int = int(mm_str) if mm_str.isdigit() else None
+        day_int = int(dd_str) if dd_str.isdigit() else None
+    except ValueError as e:
+        logging.warning(f"Could not convert parts of {original_filename_for_logging} to int (yy:{yy_str}, w:{week_str}, m:{mm_str}, d:{dd_str}). Error: {e}")
+        return {'full_name': original_filename_for_logging, 'parse_error': True}
+
+    # Standardized filename
+    # Just use the week number without leading zeros (W1, W2, etc.)
+    week_display = str(week_int) if week_int is not None else 'XX'
+    full_name = f"Nigeria_{dd_str}_{month_name}_{yy_str}_W{week_display}.pdf"
+
+    return {
+        'full_name': full_name,          # Standardized name for 'new_name' column
+        'month_name': month_name,        # For reference, not a direct DB column usually
+        'year': year_int,                # For 'year' column (bigint, last two digits only)
+        'month': month_int,              # For 'month' column (int, no leading zero)
+        'week': week_int,                # For 'week' column (bigint)
+        'day': day_int,                  # For reference, not typically in 'website_data'
+        'parse_error': False
+    }

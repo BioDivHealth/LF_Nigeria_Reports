@@ -32,15 +32,16 @@ import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 import logging
 import time
+import cloudscraper
 from pathlib import Path
 from bs4 import BeautifulSoup
 import pandas as pd
 # Handle imports for both standalone execution and execution from main.py
 try:
-    from utils.data_validation import add_uuid_column
+    from utils.data_validation import add_uuid_column, rename_lassa_file
     from utils.db_utils import get_db_engine, push_data_with_upsert, safe_convert_to_int
 except ImportError:
-    from src.utils.data_validation import add_uuid_column
+    from src.utils.data_validation import add_uuid_column, rename_lassa_file
     from src.utils.db_utils import get_db_engine, push_data_with_upsert, safe_convert_to_int
 from sqlalchemy import text
 
@@ -82,63 +83,21 @@ documentation_dir.mkdir(parents=True, exist_ok=True)
 base_url = "https://ncdc.gov.ng"
 list_page_url = f"{base_url}/diseases/sitreps/?cat=5&name=An%20update%20of%20Lassa%20fever%20outbreak%20in%20Nigeria"
 
-# Define function to rename Lassa fever report filenames and extract metadata
-def rename_lassa_file(old_name):
+import logging
+import re
+def fetch_with_cloudscraper(url: str) -> str:
     """
-    Standardize Lassa fever report filenames and extract metadata.
-    Converts original NCDC filenames to a standardized format and extracts date/week info.
-    Returns a dictionary with parsed info or an error flag.
+    Fetch HTML using cloudscraper, which solves Cloudflare IUAM challenges automatically.
+    Proxy settings are read from environment variables HTTP_PROXY and HTTPS_PROXY.
     """
-    month_map = {
-        "01": "Jan", "02": "Feb", "03": "Mar", "04": "Apr",
-        "05": "May", "06": "Jun", "07": "Jul", "08": "Aug",
-        "09": "Sep", "10": "Oct", "11": "Nov", "12": "Dec",
-    }
-    original_filename_for_logging = old_name
-    old_name = old_name.replace(" ", "_")
-    parts = old_name.split("_")
+    # Build proxies dict if environment variables are set
+    proxy = os.getenv('HTTP_PROXY') or os.getenv('HTTPS_PROXY')
+    proxies = {'http': proxy, 'https': proxy} if proxy else None
 
-    if len(parts) < 9:
-        logging.warning(f"Could not parse filename: {original_filename_for_logging}, too few parts.")
-        return {'full_name': original_filename_for_logging, 'parse_error': True}
-
-    date_str = parts[8]
-    week_str_raw = parts[9].replace(".pdf", "") if parts[9].endswith(".pdf") else ""
-    
-    # Ensure week_str is just the number, remove 'W' if present
-    week_str = week_str_raw.upper().lstrip('W')
-
-    if len(date_str) != 6:
-        logging.warning(f"Could not parse date string from filename: {original_filename_for_logging}, date_str: {date_str}")
-        return {'full_name': original_filename_for_logging, 'parse_error': True}
-
-    dd_str, mm_str, yy_str = date_str[:2], date_str[2:4], date_str[4:]
-    month_name = month_map.get(mm_str, "???")
-    
-    try:
-        # Always use last two digits for year (e.g., '2025' -> 25, '2021' -> 21)
-        year_int = int(yy_str)
-        week_int = int(week_str) if week_str.isdigit() else None
-        month_int = int(mm_str) if mm_str.isdigit() else None
-        day_int = int(dd_str) if dd_str.isdigit() else None
-    except ValueError as e:
-        logging.warning(f"Could not convert parts of {original_filename_for_logging} to int (yy:{yy_str}, w:{week_str}, m:{mm_str}, d:{dd_str}). Error: {e}")
-        return {'full_name': original_filename_for_logging, 'parse_error': True}
-
-    # Standardized filename
-    # Just use the week number without leading zeros (W1, W2, etc.)
-    week_display = str(week_int) if week_int is not None else 'XX'
-    full_name = f"Nigeria_{dd_str}_{month_name}_{yy_str}_W{week_display}.pdf"
-
-    return {
-        'full_name': full_name,          # Standardized name for 'new_name' column
-        'month_name': month_name,        # For reference, not a direct DB column usually
-        'year': year_int,                # For 'year' column (bigint, last two digits only)
-        'month': month_int,              # For 'month' column (int, no leading zero)
-        'week': week_int,                # For 'week' column (bigint)
-        'day': day_int,                  # For reference, not typically in 'website_data'
-        'parse_error': False
-    }
+    scraper = cloudscraper.create_scraper()  # returns a CloudScraper instance
+    resp = scraper.get(url, proxies=proxies)
+    resp.raise_for_status()
+    return resp.text
 
 def save_raw_website_data(soup, db_engine):
     """
@@ -440,7 +399,6 @@ def process_file_status_update(db_engine):
     if updated_count == 0 and inserted_count == 0 and processed_fs_rows > 0:
         logging.info("No records in Supabase were changed based on file_status.csv (either no matches or data was already consistent).")
 
-
 def main():
     """
     Main entry point for the script.
@@ -450,59 +408,17 @@ def main():
     logging.info(f"Starting 01_URL_Sourcing script...")
     logging.info(f"Attempting to fetch NCDC list page: {list_page_url}")
     try:
-        # Enhanced multi-strategy approach to bypass 403 errors
-        logging.info("Attempting to fetch NCDC page with multiple strategies...")
+        # Using cloudscraper to bypass Cloudflare protection
+        logging.info("Fetching NCDC page with cloudscraper...")
+        
+        try:
+            html_content = fetch_with_cloudscraper(list_page_url)
+            logging.info("Successfully fetched page using cloudscraper")
+        except Exception as e:
+            logging.error(f"Failed to fetch page with cloudscraper: {e}")
+            raise requests.exceptions.RequestException(f"Cloudscraper fetch failed: {e}")
 
-        # Helper to check response and log body on error
-        def _check(response, name):
-            if response.status_code != 200:
-                snippet = response.text[:200].replace("\n", " ")
-                logging.warning(f"{name} returned {response.status_code}: {snippet}")
-                response.raise_for_status()
-            return response
-
-        # Strategy 3: ScraperAPI *endpoint* method (one TLS hop – avoids the proxy‑chain SSL issue)
-        def fetch_with_endpoint():
-            key = os.environ['SCRAPER_API_KEY'].strip()
-            params = {'api_key': key, 'url': list_page_url}
-            resp = requests.get('https://api.scraperapi.com/', params=params, timeout=60)
-            return _check(resp, "endpoint")
-
-        # Strategy 4: Hardened ScraperAPI proxy method (skip SSL validation for broken chains)
-        def fetch_with_proxy():
-            key = os.environ['SCRAPER_API_KEY'].strip()
-            proxy = f"http://scraperapi:{key}@proxy-server.scraperapi.com:8001"
-            proxies = {"http": proxy, "https": proxy}
-            # The target site’s certificate chain is occasionally incomplete;
-            # skip validation for this hop (we still have TLS encryption in transit).
-            resp = requests.get(list_page_url, proxies=proxies, timeout=60, verify=False)
-            return _check(resp, "proxy")
-
-        # Try each strategy in sequence until one works
-        response = None
-        strategies = [
-            ("endpoint", fetch_with_endpoint),
-            ("proxy", fetch_with_proxy)
-        ]
-
-        last_error = None
-        for strategy_name, strategy_func in strategies:
-            try:
-                logging.info(f"Trying strategy: {strategy_name}")
-                response = strategy_func()
-                if response and response.status_code == 200:
-                    logging.info(f"Successfully fetched page using strategy: {strategy_name}")
-                    break
-            except Exception as e:
-                logging.warning(f"Strategy {strategy_name} failed: {e}")
-                last_error = e
-                logging.debug(f"{strategy_name} exception detail: {e}", exc_info=True)
-                continue
-
-        if not response or response.status_code != 200:
-            raise requests.exceptions.RequestException(f"All strategies failed. Last error: {last_error}")
-
-        soup_content = BeautifulSoup(response.text, "html.parser")
+        soup_content = BeautifulSoup(html_content, "html.parser")
         logging.info("Successfully parsed NCDC page content.")
 
         # Save the HTML content for debugging in case of future issues
@@ -512,7 +428,7 @@ def main():
             timestamp = time.strftime("%Y%m%d-%H%M%S")
             debug_file = debug_dir / f"ncdc_page_{timestamp}.html"
             with open(debug_file, 'w', encoding='utf-8') as f:
-                f.write(response.text)
+                f.write(html_content)
             logging.info(f"Saved debug HTML content to {debug_file}")
         except Exception as e:
             logging.warning(f"Failed to save debug HTML: {e}")
