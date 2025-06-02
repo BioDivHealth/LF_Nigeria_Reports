@@ -13,6 +13,9 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
       
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -57,4 +60,4 @@ jobs:
         # Only add the latest data file and README, not the timestamped versions
         git add exports/lassa_data_latest.csv exports/README.md
         git commit -m "Update exported Lassa fever data [skip ci]" || echo "No changes to commit"
-        git push
+        git push https://${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git
