@@ -135,6 +135,38 @@ Access it at `http://127.0.0.1:8050`.
 4. **Combined Master CSV**: `data/processed/combined_lassa_data_{years}.csv`
 5. **Metadata**: `data/documentation/website_raw_data.csv` and status CSVs
 
+## Data Access
+
+### Download Latest Data
+
+The pipeline automatically exports the latest Lassa fever case data to CSV files. Your coworkers can access this data in two ways:
+
+1. **Direct Download from GitHub**: 
+   - Navigate to the [exports directory](exports/lassa_data_latest.csv) in the repository
+   - Download `lassa_data_latest.csv` for the most recent data
+
+2. **Supabase Storage**:
+   - The data is also available through Supabase Storage
+   - Direct download link: `https://[PROJECT_ID].supabase.co/storage/v1/object/public/lassa-data/data/exports/lassa_data_latest.csv`
+   - Replace `[PROJECT_ID]` with your Supabase project ID
+   - No authentication required for public buckets
+
+### Data Format
+
+Each CSV file contains the following columns:
+- `year`: Year of the report
+- `week`: Epidemiological week number
+- `states`: Nigerian state name
+- `suspected`: Number of suspected cases
+- `confirmed`: Number of confirmed cases
+- `probable`: Number of probable cases
+- `hcw`: Number of healthcare worker cases
+- `deaths`: Number of deaths
+
+### Historical Data
+
+In addition to the latest data, timestamped versions are also available with the naming format `lassa_data_YYYYMMDD.csv`.
+
 ## Dependencies
 
 - Python 3.8+

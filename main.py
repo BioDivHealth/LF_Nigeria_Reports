@@ -14,6 +14,7 @@ It sequentially executes each step of the pipeline in the correct order:
 7. SyncCombiningStatus: Syncs combining status between local and cloud storage
 8. PushToDB: Pushes extracted data to the database
 9. CloudSync: Syncs all data to cloud storage
+10. ExportData: Exports data from Supabase to CSV files in the repository
 
 Usage:
     python main.py
@@ -101,7 +102,8 @@ def run_pipeline():
         {"name": "LLM_Extraction_Supabase", "path": base_dir / "src" / "04b_LLM_Extraction_Supabase.py"},
         {"name": "SyncCombiningStatus", "path": base_dir / "src" / "05a_SyncCombiningStatus.py"},
         {"name": "PushToDB", "path": base_dir / "src" / "05b_PushToDB.py"},
-        {"name": "CloudSync", "path": base_dir / "src" / "06_CloudSync.py"}
+        {"name": "CloudSync", "path": base_dir / "src" / "06_CloudSync.py"},
+        {"name": "ExportData", "path": base_dir / "src" / "07_ExportData.py"}
     ]
     
     # Track overall success of the pipeline

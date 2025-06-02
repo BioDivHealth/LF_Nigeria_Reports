@@ -36,6 +36,7 @@ jobs:
         mkdir -p data/processed/PDF
         mkdir -p data/processed/PDF/PDFs_Lines_25
         mkdir -p data/documentation
+        mkdir -p exports
         
     - name: Run Lassa Reports Scraping Pipeline
       env:
@@ -45,4 +46,15 @@ jobs:
         B2_APPLICATION_KEY: ${{ secrets.B2_APPLICATION_KEY }}
         B2_BUCKET_NAME: ${{ secrets.B2_BUCKET_NAME }}
         SCRAPER_API_KEY: ${{ secrets.SCRAPER_API_KEY }}
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
       run: python main.py
+      
+    - name: Commit and push exported data
+      run: |
+        git config --global user.name 'GitHub Actions'
+        git config --global user.email 'actions@github.com'
+        # Only add the latest data file and README, not the timestamped versions
+        git add exports/lassa_data_latest.csv exports/README.md
+        git commit -m "Update exported Lassa fever data [skip ci]" || echo "No changes to commit"
+        git push
