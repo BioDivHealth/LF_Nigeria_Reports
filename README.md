@@ -11,7 +11,6 @@ This pipeline automates the end-to-end processing of weekly Lassa fever reports:
 - Uses Google Gemini AI to extract structured case data (Suspected, Confirmed, Probable, HCW, Deaths) at state and week granularity.
 - Validates logical consistency (Suspected ≥ Confirmed ≥ Deaths) with retry and correction logic.
 - Combines per-year CSV datasets into a unified master CSV for time-series analysis.
-- Provides an interactive Dash dashboard for exploring case trends by state, week, and year.
 
 **Data sources:**
 - Raw PDF situation reports from NCDC
@@ -85,7 +84,7 @@ This pipeline automates the end-to-end processing of weekly Lassa fever reports:
    pip install -r requirements.txt
    ```
 
-2. Create a `.env` file in the project root with your API keys:
+2. Create a `.env` file in the project root with your API keys, e.g.:
    ```bash
    GOOGLE_GENAI_API_KEY=<your_key>
    ```
@@ -101,31 +100,17 @@ python main.py
 This executes the following steps in order:
 
 1. **URL Sourcing** (`src/01_URL_Sourcing.py`)
-2. **PDF Download** (`src/02_PDF_Download.py`)
-3. **Table Enhancement** (`src/03_TableEnhancement.py`)
-4. **Table Extraction & Sorting** (`src/04_TableExtractionSorting.py`)
-5. **Data Combination** (`src/05_CombineData.py`)
-
-### Run Individual Steps
-
-You can run any script independently:
-```bash
-python src/01_URL_Sourcing.py
-```
-
-### Update Processing Status
-
-```bash
-python src/00_Update_Status.py
-```
-
-### Dashboard
-
-Launch the interactive dashboard:
-```bash
-python src/Dashboard.py
-```
-Access it at `http://127.0.0.1:8050`.
+2. **PDF Download** (`src/02_PDF_Download_Supabase.py`)
+3. **SyncEnhancement** (`src/03a_SyncEnhancement.py`)
+4. **Table Enhancement** (`src/03b_TableEnhancement_Supabase.py`)
+5. **SyncProcessed** (`src/04a_SyncProcessed.py`)
+6. **LLM Extraction** (`src/04b_LLM_Extraction_Supabase.py`)
+7. **SyncCombiningStatus** (`src/05a_SyncCombiningStatus.py`)
+8. **PushToDB** (`src/05b_PushToDB.py`)
+9. **CombinedStatus** (`src/05c_CombinedStatus.py`)
+10. **State Cleaning** (`src/05d_CleanStates.py`)
+11. **CloudSync** (`src/06_CloudSync.py`)
+12. **ExportData** (`src/07_ExportData.py`)
 
 ## Data Flow
 
@@ -147,9 +132,7 @@ The pipeline automatically exports the latest Lassa fever case data to CSV files
 
 2. **Supabase Storage**:
    - The data is also available through Supabase Storage
-   - Direct download link: `https://[PROJECT_ID].supabase.co/storage/v1/object/public/lassa-data/data/exports/lassa_data_latest.csv`
-   - Replace `[PROJECT_ID]` with your Supabase project ID
-   - No authentication required for public buckets
+   - Direct download link: [click here](https://csoccwksnrjkwkfpzqxx.supabase.co/storage/v1/object/sign/lassa-data/data/exports/lassa_data_latest.csv?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV81YThiMWNkNi1hM2RlLTQxZDUtODBhOC0zMGU2M2EwNzFkMTIiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJsYXNzYS1kYXRhL2RhdGEvZXhwb3J0cy9sYXNzYV9kYXRhX2xhdGVzdC5jc3YiLCJpYXQiOjE3NDg4ODE1NjAsImV4cCI6MTc4MDQxNzU2MH0.bdBA9U2WZmg3QgX98FZf-ZwWBk9llP2wKGrnJhXKx9w)
 
 ### Data Format
 
@@ -162,10 +145,6 @@ Each CSV file contains the following columns:
 - `probable`: Number of probable cases
 - `hcw`: Number of healthcare worker cases
 - `deaths`: Number of deaths
-
-### Historical Data
-
-In addition to the latest data, timestamped versions are also available with the naming format `lassa_data_YYYYMMDD.csv`.
 
 ## Dependencies
 
