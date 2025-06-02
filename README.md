@@ -2,6 +2,8 @@
 
 A Python-based data processing pipeline for scraping, processing, and analyzing Lassa fever situation reports from the Nigeria Centre for Disease Control (NCDC).
 
+> ### Newest up-to-date dataset is available [here 🔗](exports/lassa_data_latest.csv)
+---
 ## Project Overview
 
 This pipeline automates the end-to-end processing of weekly Lassa fever reports:
