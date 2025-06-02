@@ -6,7 +6,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 25,21,Ebonyi,3.0,,,,
 25,21,Edo,58.0,,,,
 25,21,Enugu,1.0,,,,
-25,21,Fct,1.0,,,,
+25,21,FCT,1.0,,,,
 25,21,Kogi,1.0,,,,
 25,21,Nasarawa,1.0,,,,
 25,21,Ondo,47.0,4.0,,,
@@ -91,7 +91,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 25,14,Edo,55.0,2.0,,,1.0
 25,14,Ekiti,1.0,,,,
 25,14,Enugu,1.0,,,,
-25,14,Fct,1.0,,,,
+25,14,FCT,1.0,,,,
 25,14,Gombe,5.0,1.0,,,1.0
 25,14,Nasarawa,6.0,,,,
 25,14,Ogun,1.0,,,,
@@ -130,7 +130,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 25,12,Edo,72.0,3.0,,,1.0
 25,12,Ekiti,4.0,,,,
 25,12,Enugu,1.0,,,,
-25,12,Fct,2.0,,,,
+25,12,FCT,2.0,,,,
 25,12,Gombe,5.0,1.0,,,
 25,12,Kaduna,1.0,,,,
 25,12,Kwara,2.0,,,,
@@ -151,7 +151,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 25,11,Edo,56.0,4.0,,,
 25,11,Ekiti,1.0,,,,
 25,11,Enugu,4.0,2.0,,,1.0
-25,11,Fct,2.0,1.0,,1.0,
+25,11,FCT,2.0,1.0,,1.0,
 25,11,Gombe,2.0,,,,
 25,11,Kaduna,7.0,3.0,,,2.0
 25,11,Katsina,1.0,,,,
@@ -215,7 +215,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 25,8,Edo,109.0,8.0,,,1.0
 25,8,Ekiti,1.0,,,,
 25,8,Enugu,1.0,,,,
-25,8,Fct,1.0,,,,
+25,8,FCT,1.0,,,,
 25,8,Gombe,3.0,,,,
 25,8,Kogi,5.0,1.0,,,
 25,8,Nasarawa,4.0,,,,
@@ -232,7 +232,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 25,7,Ebonyi,7.0,,,,
 25,7,Edo,73.0,4.0,,,1.0
 25,7,Enugu,1.0,,,,
-25,7,Fct,1.0,,,,
+25,7,FCT,1.0,,,,
 25,7,Gombe,3.0,,,,
 25,7,Kaduna,2.0,,,,
 25,7,Kano,1.0,,,,
@@ -306,7 +306,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 25,3,Ebonyi,11.0,2.0,,,1.0
 25,3,Edo,121.0,16.0,,,4.0
 25,3,Enugu,1.0,,,,
-25,3,Fct,1.0,,,,
+25,3,FCT,1.0,,,,
 25,3,Gombe,3.0,1.0,,,2.0
 25,3,Imo,3.0,,,,
 25,3,Kogi,3.0,1.0,1.0,,1.0
@@ -323,7 +323,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 25,2,Bayelsa,1.0,,,,
 25,2,Ebonyi,12.0,1.0,,,2.0
 25,2,Edo,82.0,23.0,,,4.0
-25,2,Fct,2.0,,,,
+25,2,FCT,2.0,,,,
 25,2,Gombe,7.0,3.0,,1.0,1.0
 25,2,Kaduna,4.0,,,,
 25,2,Kano,2.0,,,,
@@ -355,7 +355,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 24,52,Edo,62.0,16.0,,,2.0
 24,52,Ekiti,1.0,,,,
 24,52,Enugu,3.0,2.0,,,
-24,52,Fct,1.0,,,,
+24,52,FCT,1.0,,,,
 24,52,Kogi,1.0,,,,
 24,52,Lagos,1.0,,,,
 24,52,Nasarawa,1.0,,,,
@@ -371,7 +371,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 24,51,Ebonyi,10.0,2.0,,,2.0
 24,51,Edo,34.0,5.0,,,
 24,51,Enugu,3.0,1.0,,,
-24,51,Fct,1.0,,,,
+24,51,FCT,1.0,,,,
 24,51,Gombe,2.0,,,,
 24,51,Kogi,2.0,1.0,,,
 24,51,Lagos,1.0,,,,
@@ -386,7 +386,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 24,50,Ebonyi,5.0,1.0,,,
 24,50,Edo,53.0,4.0,,,
 24,50,Enugu,2.0,,,,
-24,50,Fct,1.0,,,,
+24,50,FCT,1.0,,,,
 24,50,Gombe,1.0,,,,
 24,50,Kogi,2.0,1.0,,,
 24,50,Lagos,1.0,,,,
@@ -448,7 +448,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 24,46,Ebonyi,3.0,,,,
 24,46,Edo,46.0,,,,
 24,46,Enugu,2.0,,,,
-24,46,Fct,3.0,,,,
+24,46,FCT,3.0,,,,
 24,46,Gombe,3.0,,,,
 24,46,Kaduna,1.0,,,,
 24,46,Kano,1.0,,,,
@@ -475,7 +475,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 24,45,Total,109.0,10.0,,,
 24,44,Bauchi,9.0,1.0,,,
 24,44,Edo,36.0,,,,
-24,44,Fct,1.0,,,,
+24,44,FCT,1.0,,,,
 24,44,Gombe,1.0,,,,
 24,44,Ondo,21.0,3.0,,,
 24,44,Rivers,1.0,,,,
@@ -511,7 +511,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 24,41,Ebonyi,1.0,,,,
 24,41,Edo,35.0,3.0,,,
 24,41,Enugu,2.0,,,,
-24,41,Fct,2.0,,,,
+24,41,FCT,2.0,,,,
 24,41,Gombe,1.0,,,,
 24,41,Kano,1.0,,,,
 24,41,Kebbi,1.0,,,,
@@ -527,7 +527,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 24,40,Delta,1.0,,,,
 24,40,Ebonyi,3.0,,,,
 24,40,Edo,25.0,2.0,,,
-24,40,Fct,1.0,,,,
+24,40,FCT,1.0,,,,
 24,40,Kano,1.0,,,,
 24,40,Lagos,1.0,,,,
 24,40,Nasarawa,2.0,,,,
@@ -564,7 +564,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 24,37,Delta,1.0,,,,
 24,37,Edo,43.0,2.0,,,
 24,37,Enugu,15.0,1.0,,,1.0
-24,37,Fct,3.0,,,,
+24,37,FCT,3.0,,,,
 24,37,Gombe,1.0,,,,
 24,37,Imo,1.0,,,,
 24,37,Kaduna,1.0,,,,
@@ -605,7 +605,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 24,34,Delta,1.0,,,,
 24,34,Ebonyi,2.0,,,,
 24,34,Edo,28.0,1.0,,,
-24,34,Fct,2.0,,,,
+24,34,FCT,2.0,,,,
 24,34,Imo,1.0,,,,
 24,34,Kaduna,3.0,,,,
 24,34,Kogi,1.0,,,,
@@ -622,7 +622,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 24,33,Delta,1.0,,,,
 24,33,Ebonyi,7.0,1.0,,1.0,
 24,33,Edo,62.0,3.0,,,1.0
-24,33,Fct,2.0,,,,
+24,33,FCT,2.0,,,,
 24,33,Gombe,1.0,,,,
 24,33,Kogi,2.0,1.0,,,1.0
 24,33,Nasarawa,1.0,,,,
@@ -665,7 +665,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 24,30,Ebonyi,7.0,,,,
 24,30,Edo,80.0,4.0,,,
 24,30,Enugu,1.0,,,,
-24,30,Fct,3.0,,,,
+24,30,FCT,3.0,,,,
 24,30,Kogi,1.0,1.0,,,
 24,30,Nasarawa,1.0,,,,
 24,30,Oyo,1.0,,,,
@@ -678,7 +678,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 24,29,Ebonyi,4.0,,,,
 24,29,Edo,72.0,2.0,,,
 24,29,Ekiti,1.0,,,,
-24,29,Fct,1.0,,,,
+24,29,FCT,1.0,,,,
 24,29,Jigawa,1.0,,,,
 24,29,Kaduna,2.0,,,,
 24,29,Kano,2.0,,,,
@@ -695,7 +695,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 24,28,Edo,54.0,5.0,,1.0,
 24,28,Ekiti,1.0,,,,
 24,28,Enugu,2.0,,,,
-24,28,Fct,2.0,,,,
+24,28,FCT,2.0,,,,
 24,28,Kano,1.0,,,,
 24,28,Kebbi,1.0,,,,
 24,28,Kogi,2.0,,,,
@@ -709,7 +709,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 24,27,Delta,1.0,,,,
 24,27,Ebonyi,4.0,1.0,,,1.0
 24,27,Edo,50.0,1.0,,,
-24,27,Fct,1.0,,,,
+24,27,FCT,1.0,,,,
 24,27,Kogi,2.0,,,,
 24,27,Nasarawa,1.0,,,,
 24,27,Ogun,1.0,,,,
@@ -750,7 +750,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 24,24,Ebonyi,5.0,,,,
 24,24,Edo,53.0,1.0,,,
 24,24,Ekiti,1.0,,,,
-24,24,Fct,1.0,,,,
+24,24,FCT,1.0,,,,
 24,24,Kogi,1.0,,,,
 24,24,Lagos,2.0,,,,
 24,24,Ogun,1.0,,,,
@@ -780,7 +780,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 24,22,Delta,3.0,,,,
 24,22,Ebonyi,8.0,,,,
 24,22,Edo,45.0,2.0,,,
-24,22,Fct,1.0,,,,
+24,22,FCT,1.0,,,,
 24,22,Gombe,1.0,,,,
 24,22,Kogi,4.0,1.0,,,
 24,22,Kwara,1.0,,,,
@@ -809,7 +809,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 24,20,Benue,5.0,,,,
 24,20,Ebonyi,4.0,,,,
 24,20,Edo,52.0,2.0,,,1.0
-24,20,Fct,2.0,,,,
+24,20,FCT,2.0,,,,
 24,20,Gombe,1.0,,,,
 24,20,Kogi,1.0,,,,
 24,20,Lagos,1.0,,,,
@@ -825,7 +825,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 24,19,Ebonyi,3.0,,,,
 24,19,Edo,46.0,3.0,,,1.0
 24,19,Enugu,2.0,,,,
-24,19,Fct,1.0,,,,
+24,19,FCT,1.0,,,,
 24,19,Imo,1.0,,,,
 24,19,Jigawa,1.0,,,,
 24,19,Kaduna,3.0,,,,
@@ -843,7 +843,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 24,18,Ebonyi,2.0,,,,
 24,18,Edo,54.0,3.0,,,
 24,18,Ekiti,1.0,,,,
-24,18,Fct,1.0,,,,
+24,18,FCT,1.0,,,,
 24,18,Gombe,1.0,,,,
 24,18,Imo,1.0,,,,
 24,18,Kogi,1.0,,,,
@@ -860,7 +860,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 24,17,Ebonyi,3.0,,,,
 24,17,Edo,46.0,,,,
 24,17,Ekiti,1.0,,,,
-24,17,Fct,1.0,,,,
+24,17,FCT,1.0,,,,
 24,17,Gombe,2.0,1.0,,,1.0
 24,17,Imo,1.0,,,,
 24,17,Kogi,4.0,,,,
@@ -902,7 +902,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 24,14,Ebonyi,5.0,,,,
 24,14,Edo,64.0,1.0,,,
 24,14,Enugu,1.0,,,,
-24,14,Fct,2.0,,,,
+24,14,FCT,2.0,,,,
 24,14,Imo,1.0,,,,
 24,14,Kaduna,1.0,,,,
 24,14,Kano,1.0,,,,
@@ -923,7 +923,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 24,13,Ebonyi,10.0,,,,
 24,13,Edo,58.0,1.0,,,
 24,13,Enugu,5.0,,,,
-24,13,Fct,1.0,,,,
+24,13,FCT,1.0,,,,
 24,13,Jigawa,1.0,,,,
 24,13,Kaduna,3.0,,,,
 24,13,Katsina,1.0,,,,
@@ -950,7 +950,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 24,12,Edo,77.0,4.0,,,
 24,12,Ekiti,2.0,,,,
 24,12,Enugu,1.0,,,,
-24,12,Fct,1.0,,,,
+24,12,FCT,1.0,,,,
 24,12,Imo,2.0,,,,
 24,12,Jigawa,2.0,,,,
 24,12,Kaduna,7.0,,,,
@@ -978,7 +978,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 24,11,Edo,72.0,6.0,,,
 24,11,Ekiti,1.0,,,,
 24,11,Enugu,1.0,,,,
-24,11,Fct,4.0,,,,
+24,11,FCT,4.0,,,,
 24,11,Gombe,1.0,,,,
 24,11,Jigawa,1.0,,,,
 24,11,Kaduna,3.0,,,,
@@ -1004,7 +1004,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 24,10,Edo,77.0,5.0,,,2.0
 24,10,Ekiti,1.0,,,,
 24,10,Enugu,15.0,,,,
-24,10,Fct,3.0,,,,
+24,10,FCT,3.0,,,,
 24,10,Gombe,4.0,,,,
 24,10,Imo,1.0,,,,
 24,10,Jigawa,4.0,,,,
@@ -1036,7 +1036,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 24,9,Edo,122.0,16.0,,1.0,3.0
 24,9,Ekiti,1.0,,,,
 24,9,Enugu,33.0,3.0,,,1.0
-24,9,Fct,13.0,,,,
+24,9,FCT,13.0,,,,
 24,9,Gombe,4.0,,,,
 24,9,Imo,3.0,,,,
 24,9,Jigawa,12.0,2.0,,,1.0
@@ -1068,7 +1068,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 24,8,Ebonyi,29.0,3.0,,1.0,1.0
 24,8,Edo,131.0,29.0,,,4.0
 24,8,Enugu,2.0,1.0,,,
-24,8,Fct,6.0,,,,
+24,8,FCT,6.0,,,,
 24,8,Gombe,3.0,1.0,,,
 24,8,Imo,3.0,,,,
 24,8,Kaduna,13.0,6.0,1.0,3.0,5.0
@@ -1093,7 +1093,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 24,7,Ebonyi,13.0,5.0,,1.0,5.0
 24,7,Edo,126.0,22.0,,,1.0
 24,7,Enugu,3.0,2.0,,,
-24,7,Fct,1.0,,,,
+24,7,FCT,1.0,,,,
 24,7,Gombe,3.0,,,,
 24,7,Imo,11.0,2.0,,,1.0
 24,7,Jigawa,1.0,,,,
@@ -1141,7 +1141,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 24,5,Ebonyi,27.0,9.0,,,3.0
 24,5,Edo,86.0,12.0,,,2.0
 24,5,Enugu,2.0,1.0,,,
-24,5,Fct,5.0,,,,
+24,5,FCT,5.0,,,,
 24,5,Gombe,3.0,,,,
 24,5,Jigawa,1.0,,,,
 24,5,Kano,1.0,,,,
@@ -1166,7 +1166,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 24,4,Delta,3.0,,,,
 24,4,Ebonyi,15.0,3.0,,1.0,1.0
 24,4,Edo,84.0,8.0,,,1.0
-24,4,Fct,2.0,,,,
+24,4,FCT,2.0,,,,
 24,4,Gombe,3.0,,,,
 24,4,Imo,2.0,,,,
 24,4,Kogi,6.0,3.0,,,
@@ -1188,7 +1188,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 24,3,Delta,3.0,,,,
 24,3,Ebonyi,9.0,1.0,,,
 24,3,Edo,111.0,17.0,,,6.0
-24,3,Fct,6.0,2.0,,,
+24,3,FCT,6.0,2.0,,,
 24,3,Gombe,1.0,1.0,,,1.0
 24,3,Imo,1.0,,,,
 24,3,Kogi,1.0,1.0,1.0,,
@@ -1220,7 +1220,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 24,1,Ebonyi,4.0,1.0,,,1.0
 24,1,Edo,68.0,13.0,,,
 24,1,Enugu,3.0,1.0,,,
-24,1,Fct,1.0,,,,
+24,1,FCT,1.0,,,,
 24,1,Gombe,1.0,,,,
 24,1,Imo,1.0,1.0,,1.0,1.0
 24,1,Kogi,2.0,,,,
@@ -1236,7 +1236,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 23,52,Ebonyi,4.0,1.0,,,1.0
 23,52,Edo,61.0,10.0,,,3.0
 23,52,Enugu,1.0,,,,
-23,52,Fct,2.0,,,,
+23,52,FCT,2.0,,,,
 23,52,Gombe,1.0,1.0,,,1.0
 23,52,Jigawa,1.0,,,,
 23,52,Ondo,47.0,9.0,,,1.0
@@ -1251,7 +1251,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 23,51,Ebonyi,6.0,,,,
 23,51,Edo,48.0,,,,
 23,51,Ekiti,3.0,,,,
-23,51,Fct,1.0,,,,
+23,51,FCT,1.0,,,,
 23,51,Gombe,1.0,,,,
 23,51,Imo,1.0,,,,
 23,51,Kaduna,2.0,,,,
@@ -1284,7 +1284,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 23,49,Ebonyi,3.0,,,,
 23,49,Edo,40.0,3.0,,,1.0
 23,49,Enugu,1.0,,,,
-23,49,Fct,1.0,,,,
+23,49,FCT,1.0,,,,
 23,49,Gombe,5.0,,,,
 23,49,Kebbi,1.0,,,,
 23,49,Kogi,1.0,,,,
@@ -1316,7 +1316,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 23,47,Bauchi,8.0,3.0,,,3.0
 23,47,Ebonyi,4.0,,,,
 23,47,Edo,49.0,4.0,,,
-23,47,Fct,4.0,,,,
+23,47,FCT,4.0,,,,
 23,47,Gombe,5.0,,,,
 23,47,Kano,1.0,,,,
 23,47,Katsina,1.0,,,,
@@ -1362,7 +1362,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 23,44,Ebonyi,2.0,,,,
 23,44,Edo,53.0,2.0,,,
 23,44,Ekiti,1.0,,,,
-23,44,Fct,1.0,,,,
+23,44,FCT,1.0,,,,
 23,44,Kaduna,1.0,,,,
 23,44,Kano,2.0,1.0,,,
 23,44,Nasarawa,1.0,,,,
@@ -1396,7 +1396,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 23,42,Edo,48.0,3.0,,,
 23,42,Ekiti,1.0,,,,
 23,42,Enugu,1.0,,,,
-23,42,Fct,2.0,,,,
+23,42,FCT,2.0,,,,
 23,42,Gombe,1.0,,,,
 23,42,Kano,2.0,,,,
 23,42,Lagos,2.0,,,,
@@ -1435,7 +1435,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 23,39,Ebonyi,8.0,,,,
 23,39,Edo,35.0,4.0,,,
 23,39,Enugu,3.0,,,,
-23,39,Fct,1.0,,,,
+23,39,FCT,1.0,,,,
 23,39,Nasarawa,1.0,,,,
 23,39,Ondo,42.0,5.0,,,1.0
 23,39,Plateau,2.0,,,,
@@ -1461,7 +1461,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 23,37,Ebonyi,1.0,,,,
 23,37,Edo,44.0,2.0,,,
 23,37,Enugu,1.0,,,,
-23,37,Fct,1.0,,,,
+23,37,FCT,1.0,,,,
 23,37,Kogi,1.0,,,,
 23,37,Nasarawa,1.0,,,,
 23,37,Ondo,24.0,2.0,,,
@@ -1471,7 +1471,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 23,36,Cross River,2.0,,,,
 23,36,Ebonyi,3.0,,,,
 23,36,Edo,41.0,2.0,,,
-23,36,Fct,1.0,,,,
+23,36,FCT,1.0,,,,
 23,36,Gombe,1.0,,,,
 23,36,Nasarawa,1.0,,,,
 23,36,Ondo,29.0,2.0,,,
@@ -1484,7 +1484,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 23,35,Ebonyi,1.0,,,,
 23,35,Edo,49.0,1.0,,,
 23,35,Enugu,1.0,,,,
-23,35,Fct,1.0,,,,
+23,35,FCT,1.0,,,,
 23,35,Gombe,2.0,,,,
 23,35,Kaduna,2.0,,,,
 23,35,Kano,1.0,,,,
@@ -1511,7 +1511,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 23,33,Delta,1.0,,,,
 23,33,Ebonyi,4.0,,,,
 23,33,Edo,48.0,3.0,,,1.0
-23,33,Fct,1.0,,,,
+23,33,FCT,1.0,,,,
 23,33,Gombe,3.0,,,,
 23,33,Nasarawa,1.0,,,,
 23,33,Ondo,11.0,2.0,,,
@@ -1523,7 +1523,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 23,32,Edo,19.0,1.0,,,
 23,32,Ekiti,1.0,,,,
 23,32,Enugu,1.0,,,,
-23,32,Fct,1.0,,,,
+23,32,FCT,1.0,,,,
 23,32,Imo,1.0,,,,
 23,32,Ondo,61.0,4.0,,,1.0
 23,32,Total,94.0,5.0,0.0,0.0,1.0
@@ -1545,7 +1545,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 23,30,Cross River,1.0,,,,
 23,30,Ebonyi,1.0,,,,
 23,30,Edo,38.0,3.0,,,
-23,30,Fct,1.0,,,,
+23,30,FCT,1.0,,,,
 23,30,Gombe,3.0,,,,
 23,30,Kaduna,1.0,,,,
 23,30,Katsina,3.0,,,,
@@ -1558,7 +1558,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 23,29,Cross River,1.0,,,,
 23,29,Ebonyi,7.0,,,,
 23,29,Edo,42.0,3.0,,,
-23,29,Fct,1.0,,,,
+23,29,FCT,1.0,,,,
 23,29,Gombe,4.0,,,,
 23,29,Katsina,1.0,,,,
 23,29,Kogi,1.0,,,,
@@ -1571,7 +1571,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 23,28,Benue,1.0,,,,
 23,28,Ebonyi,12.0,1.0,,,1.0
 23,28,Edo,42.0,3.0,,,
-23,28,Fct,1.0,,,,
+23,28,FCT,1.0,,,,
 23,28,Gombe,1.0,1.0,,,
 23,28,Kebbi,1.0,,,,
 23,28,Kwara,2.0,,,,
@@ -1652,7 +1652,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 23,21,Edo,69.0,3.0,,,
 23,21,Ekiti,1.0,,,,
 23,21,Enugu,1.0,,,,
-23,21,Fct,1.0,,,,
+23,21,FCT,1.0,,,,
 23,21,Gombe,1.0,,,,
 23,21,Kaduna,1.0,,,,
 23,21,Ogun,1.0,,,,
@@ -1667,7 +1667,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 23,20,Cross River,1.0,,,,
 23,20,Ebonyi,5.0,,,,
 23,20,Edo,71.0,1.0,,,
-23,20,Fct,1.0,,,,
+23,20,FCT,1.0,,,,
 23,20,Gombe,2.0,1.0,,,1.0
 23,20,Jigawa,2.0,,,,
 23,20,Nasarawa,1.0,,,,
@@ -1725,7 +1725,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 23,16,Ebonyi,6.0,,,,
 23,16,Edo,84.0,7.0,,,
 23,16,Ekiti,2.0,,,,
-23,16,Fct,1.0,,,,
+23,16,FCT,1.0,,,,
 23,16,Gombe,2.0,1.0,,,1.0
 23,16,Kogi,1.0,,,,
 23,16,Nasarawa,1.0,,,,
@@ -1739,7 +1739,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 23,15,Ebonyi,5.0,,,,
 23,15,Edo,73.0,3.0,,,
 23,15,Enugu,1.0,,,,
-23,15,Fct,1.0,,,,
+23,15,FCT,1.0,,,,
 23,15,Gombe,1.0,,,,
 23,15,Kogi,1.0,,,,
 23,15,Lagos,1.0,,,,
@@ -1772,7 +1772,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 23,13,Delta,1.0,,,,
 23,13,Ebonyi,13.0,1.0,,,
 23,13,Edo,92.0,5.0,,,
-23,13,Fct,1.0,,,,
+23,13,FCT,1.0,,,,
 23,13,Gombe,1.0,,,,
 23,13,Imo,1.0,,,,
 23,13,Kaduna,3.0,,,,
@@ -1830,7 +1830,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 23,10,Ebonyi,14.0,9.0,,,5.0
 23,10,Edo,109.0,23.0,,,4.0
 23,10,Enugu,1.0,,,,
-23,10,Fct,1.0,,,,
+23,10,FCT,1.0,,,,
 23,10,Gombe,1.0,,,,
 23,10,Jigawa,3.0,1.0,,,
 23,10,Kogi,3.0,1.0,,,
@@ -1871,7 +1871,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 23,8,Benue,26.0,13.0,,,
 23,8,Ebonyi,15.0,3.0,,,1.0
 23,8,Edo,107.0,5.0,,,2.0
-23,8,Fct,2.0,1.0,,,
+23,8,FCT,2.0,1.0,,,
 23,8,Gombe,5.0,,,,
 23,8,Imo,3.0,,,,
 23,8,Jigawa,6.0,2.0,,,
@@ -1894,7 +1894,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 23,7,Edo,132.0,12.0,,,2.0
 23,7,Ekiti,2.0,,,,
 23,7,Enugu,1.0,,,,
-23,7,Fct,1.0,,,,
+23,7,FCT,1.0,,,,
 23,7,Gombe,2.0,1.0,,,
 23,7,Imo,1.0,,,,
 23,7,Nasarawa,5.0,,,,
@@ -1914,7 +1914,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 23,6,Ebonyi,11.0,4.0,,,1.0
 23,6,Edo,135.0,15.0,,,5.0
 23,6,Enugu,1.0,,,,
-23,6,Fct,3.0,,,,
+23,6,FCT,3.0,,,,
 23,6,Gombe,6.0,4.0,,,
 23,6,Imo,2.0,,,,
 23,6,Kano,2.0,,,,
@@ -1936,7 +1936,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 23,5,Ebonyi,16.0,7.0,,3.0,4.0
 23,5,Edo,183.0,35.0,,3.0,3.0
 23,5,Enugu,7.0,1.0,,,
-23,5,Fct,3.0,,,,
+23,5,FCT,3.0,,,,
 23,5,Gombe,3.0,,,,
 23,5,Imo,2.0,,,,
 23,5,Kogi,4.0,3.0,,,
@@ -1958,7 +1958,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 23,4,Ebonyi,15.0,7.0,,,5.0
 23,4,Edo,148.0,25.0,,,4.0
 23,4,Enugu,5.0,1.0,,,
-23,4,Fct,5.0,1.0,,,
+23,4,FCT,5.0,1.0,,,
 23,4,Gombe,3.0,1.0,,,
 23,4,Kaduna,2.0,,,,
 23,4,Kano,6.0,2.0,,,
@@ -1982,7 +1982,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 23,3,Edo,193.0,48.0,,1.0,6.0
 23,3,Ekiti,1.0,,,,
 23,3,Enugu,4.0,1.0,,,
-23,3,Fct,4.0,1.0,,,
+23,3,FCT,4.0,1.0,,,
 23,3,Gombe,1.0,,,,
 23,3,Imo,1.0,,,,
 23,3,Kano,8.0,,,,
@@ -2005,7 +2005,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 23,2,Ebonyi,15.0,6.0,,,2.0
 23,2,Edo,67.0,25.0,,,2.0
 23,2,Enugu,1.0,,,,
-23,2,Fct,3.0,,,,
+23,2,FCT,3.0,,,,
 23,2,Gombe,1.0,,,,
 23,2,Imo,2.0,1.0,,,1.0
 23,2,Kogi,1.0,1.0,,,
@@ -2025,7 +2025,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 23,1,Ebonyi,5.0,1.0,,,
 23,1,Edo,40.0,16.0,,,
 23,1,Enugu,1.0,,,,
-23,1,Fct,22.0,,,,
+23,1,FCT,22.0,,,,
 23,1,Imo,1.0,,,,
 23,1,Kaduna,1.0,,,,
 23,1,Kogi,1.0,1.0,,,
@@ -2127,7 +2127,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 22,45,Ebonyi,4.0,1.0,,,
 22,45,Edo,62.0,4.0,,,
 22,45,Enugu,1.0,,,,
-22,45,Fct,1.0,,,,
+22,45,FCT,1.0,,,,
 22,45,Nasarawa,2.0,,,,
 22,45,Ondo,21.0,3.0,,,
 22,45,Oyo,2.0,1.0,,,
@@ -2245,7 +2245,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 22,33,Bauchi,2.0,,,,
 22,33,Delta,1.0,,,,
 22,33,Edo,52.0,1.0,,,
-22,33,Fct,1.0,,,,
+22,33,FCT,1.0,,,,
 22,33,Kogi,1.0,,,,
 22,33,Lagos,2.0,,,,
 22,33,Ogun,1.0,,,,
@@ -2355,7 +2355,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 22,24,Delta,1.0,,,,
 22,24,Ebonyi,4.0,,,,
 22,24,Edo,37.0,2.0,,,1.0
-22,24,Fct,1.0,,,,
+22,24,FCT,1.0,,,,
 22,24,Kogi,1.0,,,,
 22,24,Ondo,39.0,5.0,,,2.0
 22,24,Plateau,3.0,1.0,,,
@@ -2380,7 +2380,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 22,18,Ebonyi,2.0,,,,
 22,18,Edo,45.0,1.0,,,1.0
 22,18,Enugu,1.0,,,,
-22,18,Fct,1.0,,,,
+22,18,FCT,1.0,,,,
 22,18,Lagos,1.0,,,,
 22,18,Ogun,2.0,,,,
 22,18,Ondo,13.0,1.0,,,1.0
@@ -2484,7 +2484,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 22,11,Ebonyi,9.0,2.0,,1.0,3.0
 22,11,Edo,86.0,4.0,,,1.0
 22,11,Enugu,4.0,3.0,,,
-22,11,Fct,5.0,,,,
+22,11,FCT,5.0,,,,
 22,11,Gombe,4.0,,,,
 22,11,Imo,5.0,,,,
 22,11,Jigawa,1.0,,,,
@@ -2508,7 +2508,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 22,10,Ebonyi,17.0,4.0,,,1.0
 22,10,Edo,114.0,11.0,,,
 22,10,Enugu,8.0,,,,
-22,10,Fct,5.0,,,,
+22,10,FCT,5.0,,,,
 22,10,Gombe,17.0,3.0,1.0,,
 22,10,Imo,4.0,,,,
 22,10,Kebbi,2.0,1.0,,,
@@ -2579,7 +2579,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 22,7,Ebonyi,17.0,5.0,,,2.0
 22,7,Edo,120.0,22.0,,,6.0
 22,7,Enugu,12.0,3.0,,,
-22,7,Fct,1.0,,,,
+22,7,FCT,1.0,,,,
 22,7,Gombe,3.0,3.0,,,2.0
 22,7,Imo,2.0,,,,
 22,7,Kano,11.0,,,,
@@ -2600,7 +2600,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 22,6,Ebonyi,24.0,6.0,,,
 22,6,Edo,82.0,11.0,,1.0,2.0
 22,6,Enugu,12.0,4.0,,,
-22,6,Fct,2.0,1.0,,,
+22,6,FCT,2.0,1.0,,,
 22,6,Gombe,3.0,,,,
 22,6,Kaduna,1.0,,,,
 22,6,Katsina,2.0,,,,
@@ -2722,14 +2722,14 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 21,50,Lagos,1.0,,,,
 21,50,Nasarawa,10.0,,,,
 21,50,Ondo,37.0,4.0,,2.0,
-21,50,Plateu,1.0,,,,
+21,50,Plateau,1.0,,,,
 21,50,Total,190.0,10.0,0.0,2.0,3.0
 21,49,Adamawa,1.0,,,,
 21,49,Cross River,1.0,,,,
 21,49,Delta,1.0,,,,
 21,49,Ebonyi,4.0,,,,
 21,49,Edo,40.0,3.0,,,
-21,49,Fct,9.0,,,,
+21,49,FCT,9.0,,,,
 21,49,Gombe,11.0,,,,
 21,49,Jigawa,1.0,,,,
 21,49,Katsina,1.0,,,,
@@ -2893,7 +2893,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 21,26,Delta,1.0,,,,
 21,26,Ebonyi,1.0,,,,
 21,26,Edo,37.0,2.0,,,
-21,26,Fct,1.0,,,,
+21,26,FCT,1.0,,,,
 21,26,Ondo,27.0,1.0,,,
 21,26,Total,67.0,3.0,0.0,0.0,0.0
 21,25,Edo,34.0,7.0,,,
@@ -3503,7 +3503,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 20,14,Ebonyi,7.0,1.0,,,1.0
 20,14,Edo,42.0,5.0,,,
 20,14,Enugu,3.0,,,,
-20,14,Fct,1.0,,,,
+20,14,FCT,1.0,,,,
 20,14,Ondo,21.0,4.0,,,1.0
 20,14,Plateau,5.0,,,,
 20,14,Sokoto,1.0,1.0,,,
@@ -3542,7 +3542,7 @@ year,week,states,suspected,confirmed,probable,hcw,deaths
 20,12,Edo,108.0,8.0,,,
 20,12,Ekiti,1.0,,,,
 20,12,Enugu,5.0,1.0,,,
-20,12,Fct,11.0,1.0,,,1.0
+20,12,FCT,11.0,1.0,,,1.0
 20,12,Gombe,4.0,1.0,,,
 20,12,Imo,1.0,,,,
 20,12,Kaduna,4.0,,,,
