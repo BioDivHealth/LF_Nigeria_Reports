@@ -102,7 +102,8 @@ def run_pipeline():
         {"name": "LLM_Extraction_Supabase", "path": base_dir / "src" / "04b_LLM_Extraction_Supabase.py"},
         {"name": "SyncCombiningStatus", "path": base_dir / "src" / "05a_SyncCombiningStatus.py"},
         {"name": "PushToDB", "path": base_dir / "src" / "05b_PushToDB.py"},
-        {"name": "CleanStates", "path": base_dir / "src" / "05c_CleanStates.py"},
+        {"name": "CombinedStatus", "path": base_dir / "src" / "05c_CombinedStatus.py"},
+        {"name": "StateCleaning", "path": base_dir / "src" / "05d_CleanStates.py"},
         {"name": "CloudSync", "path": base_dir / "src" / "06_CloudSync.py"},
         {"name": "ExportData", "path": base_dir / "src" / "07_ExportData.py"}
     ]
