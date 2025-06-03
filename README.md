@@ -27,17 +27,12 @@ This pipeline automates the end-to-end processing of weekly Lassa fever reports:
     ├── main.py                  # Orchestrates the pipeline
     ├── requirements.txt         # Python dependencies
     ├── .env                     # Environment variables (API keys)
-    ├── config/                # Optional configuration files
     ├── data/
     │   ├── raw/               # Raw downloaded PDFs
     │   ├── processed/         # Processed data and images
     │   │   ├── PDFs_Lines_{year}/    # Enhanced table images for each year
     │   │   ├── CSV_LF_{year}_Sorted/ # Extracted and sorted CSV data
-    │   │   └── combined_lassa_data_{years}.csv  # Combined master CSV
     │   └── documentation/       # CSV metadata tracking file statuses
-    ├── logs/                    # Log files generated during execution
-    ├── PDFs_Sourced/            # Temporary storage for sourced PDFs
-    ├── reports/                 # Additional analysis reports
     ├── src/                     # Core scripts and modules
     │   ├── 00_Update_Status.py      # Update processing status
     │   │   - Scans processed directories and updates metadata CSV with current status.
