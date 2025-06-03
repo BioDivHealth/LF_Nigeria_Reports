@@ -88,6 +88,12 @@ Lassa_Reports_Scraping/
 2. Create a `.env` file in the project root with your API keys, e.g.:
    ```bash
    GOOGLE_GENAI_API_KEY=<your_key>
+   B2_APPLICATION_KEY_ID=<your_key>
+   B2_APPLICATION_KEY=<your_key>
+   B2_BUCKET_NAME=<your_key>
+   DATABASE_URL=<your_key>
+   SUPABASE_URL=<your_key>
+   SUPABASE_KEY=<your_key>
    ```
 
 ## Usage
