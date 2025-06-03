@@ -21,53 +21,57 @@ This pipeline automates the end-to-end processing of weekly Lassa fever reports:
 - Final combined master CSV
 
 ## Repository Structure
-```TeX
-└── Lassa_Reports_Scraping/
-    ├── README.md                # This file
-    ├── main.py                  # Orchestrates the pipeline
-    ├── requirements.txt         # Python dependencies
-    ├── .env                     # Environment variables (API keys)
-    ├── data/
-    │   ├── raw/               # Raw downloaded PDFs
-    │   ├── processed/         # Processed data and images
-    │   │   ├── PDFs_Lines_{year}/    # Enhanced table images for each year
-    │   │   ├── CSV_LF_{year}_Sorted/ # Extracted and sorted CSV data
-    │   └── documentation/       # CSV metadata tracking file statuses
-    ├── src/                     # Core scripts and modules
-    │   ├── 00_Update_Status.py      # Update processing status
-    │   │   - Scans processed directories and updates metadata CSV with current status.
-    │   │   - Tracks missing outputs and resets statuses for reprocessing.
-    │   ├── 01_URL_Sourcing.py       # Scrape report URLs and metadata
-    │   │   - Scrapes NCDC website for Lassa fever reports and extracts metadata.
-    │   │   - Standardizes filenames and updates `data/documentation/website_raw_data.csv`.
-    │   │   - Maintains download and processing status flags.
-    │   ├── 02_PDF_Download.py       # Download PDF reports
-    │   │   - Reads metadata CSV and downloads new PDF reports.
-    │   │   - Organizes PDFs by year under `data/raw/` and `PDFs_Sourced/`.
-    │   │   - Updates download status in metadata CSV.
-    │   ├── 03_TableEnhancement.py   # Enhance table visibility
-    │   │   - Renders PDF pages at high resolution.
-    │   │   - Detects table boundaries via color markers.
-    │   │   - Enhances lines, crops table images, and saves to `data/processed/PDFs_Lines_{year}/`.
-    │   ├── 04_TableExtractionSorting.py  # Extract & sort table data using AI
-    │   │   - Uses Google Gemini AI to extract tables from enhanced images.
-    │   │   - Validates logical consistency (Suspected ≥ Confirmed ≥ Deaths).
-    │   │   - Retries on inconsistencies, logs issues, and sorts outputs into `data/processed/CSV_LF_{year}_Sorted/`.
-    │   ├── 05_CombineData.py         # Combine yearly data into master CSV
-    │   │   - Loads per-year CSVs, concatenates, converts types, and sorts by Year & Week.
-    │   │   - Outputs combined master CSV to `data/processed/combined_lassa_data_{years}.csv`.
-    │   ├── Dashboard.py             # Interactive Dash dashboard
-    │   │   - Builds bar and line charts with Year/Week dropdown controls and callbacks.
-    │   ├── standardize_columns.py   # Column standardization utilities
-    │   ├── debug.py                 # Debugging utilities
-    │   ├── prompts/                 # AI prompt templates
-    │   │   ├── table_extraction_prompt.py  # Template for AI table extraction prompt
-    │   │   └── ...
-    │   └── utils/                   # Utility modules
-    │       ├── logging_config.py    # Configures NewlineLoggingHandler and suppresses AFC logs
-    │       └── ...
-    └── **notebooks/**              # Jupyter notebooks and experiments
+```text
+Lassa_Reports_Scraping/
+├── README.md                # This file
+├── main.py                  # Orchestrates the full pipeline
+├── requirements.txt         # Python dependencies
+├── .env                     # Environment variables (API keys)
+├── data/
+│   ├── raw/                 # Raw downloaded PDFs (organized by year)
+│   ├── processed/           # Processed data and images
+│   │   ├── PDF/             # Enhanced table images for each year
+│   │   ├── CSV/             # Extracted and sorted CSV data by year
+│   └── documentation/       # Metadata and status tracking CSVs
+├── exports/                 # Exported final datasets (CSV, README)
+├── src/                     # Core pipeline scripts
+│   ├── 01_URL_Sourcing.py               # Scrape report URLs and metadata, update Supabase
+│   ├── 02_PDF_Download_Supabase.py      # Sync/download PDFs, update download status in Supabase
+│   ├── 03a_SyncEnhancement.py           # Sync enhanced status between B2 and Supabase
+│   ├── 03b_TableEnhancement_Supabase.py # Enhance table images, upload to B2, update DB
+│   ├── 04a_SyncProcessed.py             # Sync processed (CSV) status between B2 and Supabase
+│   ├── 04b_LLM_Extraction_Supabase.py   # Extract tables from images using Gemini AI, save as CSV, update DB
+│   ├── 05a_SyncCombiningStatus.py       # Sync 'combined' status for CSVs between local, B2, and Supabase
+│   ├── 05b_PushToDB.py                  # Push processed CSVs to main DB table (lassa_data)
+│   ├── 05c_CombinedStatus.py            # Ensure DB 'combined' status matches data table
+│   ├── 05d_CleanStates.py               # Standardize state names in lassa_data
+│   ├── 06_CloudSync.py                  # Upload all pipeline artifacts to B2 cloud storage
+│   ├── 07_ExportData.py                 # Export final data to CSV, upload to Supabase Storage
+│   └── utils/                           # Utility modules (logging, cloud, db, validation, etc.)
+└── notebooks/                           # Jupyter notebooks and experiments
 ```
+
+---
+
+### Pipeline Script Overview
+
+| Script Name                       | Description |
+|-----------------------------------|-------------|
+| 01_URL_Sourcing.py                | Scrape NCDC website for Lassa fever reports, extract metadata, update Supabase |
+| 02_PDF_Download_Supabase.py       | Sync/download PDFs from B2, update download status in Supabase |
+| 03a_SyncEnhancement.py            | Sync 'enhanced' status for images between B2 and Supabase |
+| 03b_TableEnhancement_Supabase.py  | Enhance table images from PDFs, upload to B2, update DB |
+| 04a_SyncProcessed.py              | Sync 'processed' (CSV) status between B2 and Supabase |
+| 04b_LLM_Extraction_Supabase.py    | Extract tables from enhanced images using Gemini AI, validate, save as CSV, update DB |
+| 05a_SyncCombiningStatus.py        | Sync 'combined' status for CSVs between local, B2, and Supabase |
+| 05b_PushToDB.py                   | Push processed CSVs to the main DB table (lassa_data) |
+| 05c_CombinedStatus.py             | Ensure DB 'combined' status matches actual data table |
+| 05d_CleanStates.py                | Standardize and clean state names in lassa_data |
+| 06_CloudSync.py                   | Upload all pipeline artifacts (PDFs, images, CSVs) to B2 cloud storage |
+| 07_ExportData.py                  | Export final, cleaned data to CSV and Supabase Storage |
+
+---
+
 
 
 ## Setup
