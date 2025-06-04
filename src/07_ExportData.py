@@ -90,6 +90,7 @@ def export_data_to_csv(engine, output_dir):
         query = text("""
             SELECT 
                 year, 
+                month,
                 week, 
                 states, 
                 suspected, 
@@ -101,6 +102,7 @@ def export_data_to_csv(engine, output_dir):
                 lassa_data 
             ORDER BY 
                 year DESC, 
+                month DESC,
                 week DESC, 
                 states
         """)
