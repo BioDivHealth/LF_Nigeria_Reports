@@ -131,7 +131,7 @@ This executes the following steps in order:
 
 ### Download Latest Data
 
-The pipeline automatically exports the latest Lassa fever case data to CSV files. Your coworkers can access this data in two ways:
+The pipeline automatically exports the latest Lassa fever case data to CSV files. You can access this data in two ways:
 
 1. **Direct Download from GitHub**: 
    - Navigate to the [exports directory](exports/lassa_data_latest.csv) in the repository
@@ -153,21 +153,3 @@ Each CSV file contains the following columns:
 - `hcw`: Number of healthcare worker cases
 - `deaths`: Number of deaths
 
-## Dependencies
-
-- Python 3.8+
-- requests>=2.31.0
-- beautifulsoup4>=4.12.2
-- opencv-python>=4.8.0
-- numpy>=1.24.0
-- Pillow>=10.0.0
-- PyMuPDF>=1.22.5
-- python-dotenv>=1.0.0
-- google-genai>=0.3.0
-- pydantic>=2.4.0
-- pandas>=1.4.0
-- mistralai>=0.1.0
-- plotly>=5.0.0
-- dash>=2.0.0
-
-(See `requirements.txt` for exact versions.)
