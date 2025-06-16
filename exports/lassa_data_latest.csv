@@ -1,4 +1,11 @@
 year,month,week,states,suspected,confirmed,probable,hcw,deaths
+25,5,22,Bauchi,12.0,1.0,,,
+25,5,22,Bayelsa,1.0,,,,
+25,5,22,Edo,55.0,1.0,,,
+25,5,22,Gombe,1.0,,,,
+25,5,22,Nasarawa,3.0,1.0,,,
+25,5,22,Ondo,83.0,5.0,,,
+25,5,22,Total,155.0,8.0,,,
 25,5,21,Abia,2.0,,,,
 25,5,21,Bauchi,8.0,2.0,,,
 25,5,21,Cross River,1.0,,,,
