@@ -1,4 +1,14 @@
 year,month,week,states,suspected,confirmed,probable,hcw,deaths
+25,6,24,Abia,1.0,,,,
+25,6,24,Cross River,1.0,,,,
+25,6,24,Delta,1.0,,,,
+25,6,24,Ebonyi,5.0,1.0,,,1.0
+25,6,24,Edo,80.0,3.0,,,1.0
+25,6,24,Kogi,1.0,,,,
+25,6,24,Ondo,44.0,2.0,,,
+25,6,24,Rivers,1.0,,,,
+25,6,24,Taraba,4.0,2.0,,,
+25,6,24,Total,138.0,8.0,,,2.0
 25,6,23,Anambra,2.0,,,,
 25,6,23,Bauchi,8.0,1.0,,,
 25,6,23,Borno,1.0,,,,
