@@ -1,4 +1,19 @@
 year,month,week,states,suspected,confirmed,probable,hcw,deaths
+25,6,26,Abia,1.0,,,,
+25,6,26,Bauchi,1.0,,,,
+25,6,26,Cross River,1.0,,,,
+25,6,26,Delta,1.0,,,,
+25,6,26,Ebonyi,2.0,,,,
+25,6,26,Edo,86.0,3.0,,,2.0
+25,6,26,Jigawa,2.0,,,,
+25,6,26,Kaduna,2.0,,,,
+25,6,26,Kogi,2.0,,,,
+25,6,26,Kwara,1.0,,,,
+25,6,26,Nasarawa,3.0,,,,
+25,6,26,Ondo,42.0,6.0,,,1.0
+25,6,26,Oyo,3.0,,,,
+25,6,26,Taraba,1.0,,,,
+25,6,26,Total,148.0,9.0,,,3.0
 25,6,25,Anambra,1.0,,,,
 25,6,25,Bauchi,4.0,,,,
 25,6,25,Bayelsa,1.0,,,,
