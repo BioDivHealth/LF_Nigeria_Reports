@@ -1,4 +1,18 @@
 year,month,week,states,suspected,confirmed,probable,hcw,deaths
+25,7,27,Anambra,1.0,,,,
+25,7,27,Cross River,1.0,,,,
+25,7,27,Delta,1.0,,,,
+25,7,27,Ebonyi,3.0,1.0,,,1.0
+25,7,27,Edo,71.0,1.0,,,
+25,7,27,Ekiti,1.0,,,,
+25,7,27,Enugu,1.0,1.0,,,
+25,7,27,Kaduna,1.0,1.0,,,1.0
+25,7,27,Kano,5.0,,,,
+25,7,27,Lagos,2.0,1.0,,,
+25,7,27,Nasarawa,3.0,,,,
+25,7,27,Ogun,1.0,,,,
+25,7,27,Ondo,58.0,6.0,,,1.0
+25,7,27,Total,149.0,11.0,,,3.0
 25,6,26,Abia,1.0,,,,
 25,6,26,Bauchi,1.0,,,,
 25,6,26,Cross River,1.0,,,,
