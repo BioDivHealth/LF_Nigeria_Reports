@@ -1,4 +1,15 @@
 year,month,week,states,suspected,confirmed,probable,hcw,deaths
+25,7,28,Benue,81.0,3.0,,,
+25,7,28,Ebonyi,3.0,,,,
+25,7,28,Edo,78.0,1.0,,,
+25,7,28,Ekiti,1.0,,,,
+25,7,28,Enugu,4.0,,,,
+25,7,28,FCT,1.0,,,,
+25,7,28,Lagos,2.0,,,,
+25,7,28,Nasarawa,43.0,,,,
+25,7,28,Ondo,50.0,7.0,,,1.0
+25,7,28,Taraba,2.0,,,,
+25,7,28,Total,265.0,11.0,,,1.0
 25,7,27,Anambra,1.0,,,,
 25,7,27,Cross River,1.0,,,,
 25,7,27,Delta,1.0,,,,
