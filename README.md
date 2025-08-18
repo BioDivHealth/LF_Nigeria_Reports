@@ -153,3 +153,14 @@ Each CSV file contains the following columns:
 - `hcw`: Number of healthcare worker cases
 - `deaths`: Number of deaths
 
+### License and data attribution
+
+- **License (code and derived CSVs)**: CC0 1.0 Universal (Public Domain Dedication). See `LICENSE`.
+- **Source data attribution**: The raw situation report PDFs and underlying figures are published by the **Nigeria Centre for Disease Control (NCDC)** and made publicly available. This repository automates retrieval and produces a cleaned, combined dataset for convenience; we do not claim ownership over NCDC materials.
+
+### How to cite
+
+If you use this repository or the dataset, please cite it. A machine-readable citation file is provided in `CITATION.cff`. Example citations:
+
+- **Software**: Trebski, A. (2025). Lassa Fever NCDC Reports Sourcing Pipeline. GitHub. https://github.com/BioDivHealth/LF_Nigeria_Reports
+- **Dataset**: Trebski, A. (2025). Lassa Fever Nigeria weekly dataset (combined CSV). https://github.com/BioDivHealth/LF_Nigeria_Reports/blob/main/exports/lassa_data_latest.csv. Derived from publicly available NCDC weekly reports.
