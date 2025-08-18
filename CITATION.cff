@@ -1,0 +1,35 @@
+cff-version: 1.2.0
+message: "If you use this software or the derived dataset, please cite it as below."
+title: "Lassa Fever NCDC Reports Sourcing Pipeline"
+repository-code: "https://github.com/BioDivHealth/LF_Nigeria_Reports"
+license: CC0-1.0
+keywords:
+  - lassa fever
+  - nigeria
+  - epidemiology
+  - data pipeline
+authors:
+  - family-names: Trebski
+    given-names: Artur
+preferred-citation:
+  type: software
+  title: "Lassa Fever NCDC Reports Sourcing Pipeline"
+  authors:
+    - family-names: Trebski
+      given-names: Artur
+  repository-code: "https://github.com/BioDivHealth/LF_Nigeria_Reports"
+  year: 2025
+  url: "https://github.com/BioDivHealth/LF_Nigeria_Reports"
+references:
+  - type: dataset
+    title: "Lassa Fever Nigeria weekly dataset (combined CSV)"
+    authors:
+      - family-names: Trebski
+        given-names: Artur
+    year: 2025
+    url: "https://github.com/BioDivHealth/LF_Nigeria_Reports/blob/main/exports/lassa_data_latest.csv"
+    notes: "Derived from publicly available weekly situation reports by the Nigeria Centre for Disease Control (NCDC)."
+  - type: webpage
+    title: "Nigeria Centre for Disease Control (NCDC) Weekly Epidemiological Reports"
+    url: "https://ncdc.gov.ng/diseases/sitreps/?cat=5&name=An%20update%20of%20Lassa%20fever%20outbreak%20in%20Nigeria"
+
