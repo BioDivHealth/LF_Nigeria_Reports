@@ -1,4 +1,12 @@
 year,month,week,states,suspected,confirmed,probable,hcw,deaths
+25,8,32,Bauchi,4.0,2.0,,,
+25,8,32,Edo,51.0,4.0,,,
+25,8,32,FCT,1.0,,,,
+25,8,32,Gombe,2.0,,,,
+25,8,32,Jigawa,1.0,,,,
+25,8,32,Ondo,26.0,6.0,,,3.0
+25,8,32,Oyo,1.0,,,,
+25,8,32,Total,86.0,12.0,,,3.0
 25,8,31,Anambra,1.0,,,,
 25,8,31,Bauchi,6.0,,,,
 25,8,31,Cross River,1.0,,,,
