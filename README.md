@@ -163,4 +163,4 @@ Each CSV file contains the following columns:
 If you use this repository or the dataset, please cite it. A machine-readable citation file is provided in `CITATION.cff`. Example citations:
 
 - **Software**: Trebski, A. (2025). Lassa Fever NCDC Reports Sourcing Pipeline. GitHub. https://github.com/BioDivHealth/LF_Nigeria_Reports
-- **Dataset**: Trebski, A. (2025). Lassa Fever Nigeria weekly dataset (combined CSV). https://github.com/BioDivHealth/LF_Nigeria_Reports/blob/main/exports/lassa_data_latest.csv. Derived from publicly available NCDC weekly reports.
+- **Dataset**: Trebski, A. (2025). Lassa Fever weekly NCDC repors dataset. https://github.com/BioDivHealth/LF_Nigeria_Reports/blob/main/exports/lassa_data_latest.csv.

@@ -22,7 +22,7 @@ preferred-citation:
   url: "https://github.com/BioDivHealth/LF_Nigeria_Reports"
 references:
   - type: dataset
-    title: "Lassa Fever Nigeria weekly dataset (combined CSV)"
+    title: "Lassa Fever weekly NCDC reports dataset"
     authors:
       - family-names: Trebski
         given-names: Artur
