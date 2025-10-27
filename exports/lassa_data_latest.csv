@@ -1,4 +1,16 @@
 year,month,week,states,suspected,confirmed,probable,hcw,deaths
+25,10,41,Anambra,1.0,,,,
+25,10,41,Bauchi,1.0,,,,
+25,10,41,Benue,1.0,,,,
+25,10,41,Borno,1.0,,,,
+25,10,41,Edo,44.0,4.0,,,1.0
+25,10,41,Kogi,2.0,,,,
+25,10,41,Nasarawa,1.0,,,,
+25,10,41,Niger,1.0,,,,
+25,10,41,Ondo,45.0,7.0,,,1.0
+25,10,41,Plateau,1.0,,,,
+25,10,41,Taraba,2.0,,,,
+25,10,41,Total,100.0,11.0,,,2.0
 25,9,40,Delta,1.0,,,,
 25,9,40,Ebonyi,5.0,,,,
 25,9,40,Edo,51.0,,,,
