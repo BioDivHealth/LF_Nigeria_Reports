@@ -1,0 +1,22 @@
+name: supabase-keepalive
+
+on:
+  schedule:
+    - cron: "0 7 * * 1,4"   # Mon & Thu 07:00 UTC
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase (heartbeat RPC)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          curl --fail-with-body --retry 5 --retry-all-errors --retry-delay 10 \
+            -X POST "$SUPABASE_URL/rest/v1/rpc/heartbeat" \
+            -H "Content-Type: application/json" \
+            -H "apikey: $SUPABASE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_KEY" \
+            -d '{}'
