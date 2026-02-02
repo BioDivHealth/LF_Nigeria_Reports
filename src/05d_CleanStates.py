@@ -107,18 +107,43 @@ def clean_state_names(engine, dry_run=False):
     
     # Apply updates to the database
     updated_rows = 0
+    deleted_rows = 0
     with engine.begin() as conn:  # Use transaction
         for original, corrected in state_mapping.items():
             if original != corrected:
-                update_query = text("""
-                    UPDATE lassa_data 
-                    SET states = :corrected 
-                    WHERE states = :original
+                # 1) Remove duplicates that would violate the unique constraint
+                delete_query = text("""
+                    DELETE FROM lassa_data a
+                    USING lassa_data b
+                    WHERE a.states = :original
+                      AND b.states = :corrected
+                      AND a.full_year = b.full_year
+                      AND a.week = b.week
+                      AND a.id <> b.id
                 """)
-                result = conn.execute(update_query, {"original": original, "corrected": corrected})
-                updated_rows += result.rowcount
-                logger.info(f"Updated {result.rowcount} rows: '{original}' → '{corrected}'")
+                delete_result = conn.execute(delete_query, {"original": original, "corrected": corrected})
+                deleted_rows += delete_result.rowcount
+                if delete_result.rowcount:
+                    logger.info(f"Deleted {delete_result.rowcount} duplicate rows for '{original}' → '{corrected}'")
+
+                # 2) Update remaining rows only where no corrected row exists
+                update_query = text("""
+                    UPDATE lassa_data a
+                    SET states = :corrected
+                    WHERE a.states = :original
+                      AND NOT EXISTS (
+                          SELECT 1 FROM lassa_data b
+                          WHERE b.states = :corrected
+                            AND b.full_year = a.full_year
+                            AND b.week = a.week
+                      )
+                """)
+                update_result = conn.execute(update_query, {"original": original, "corrected": corrected})
+                updated_rows += update_result.rowcount
+                logger.info(f"Updated {update_result.rowcount} rows: '{original}' → '{corrected}'")
     
+    if deleted_rows:
+        logger.info(f"Total duplicate rows deleted: {deleted_rows}")
     logger.info(f"Total rows updated: {updated_rows}")
     return updated_rows
 
