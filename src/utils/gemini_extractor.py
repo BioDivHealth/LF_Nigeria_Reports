@@ -66,7 +66,7 @@ def extract_table_with_gemini(image_path, model_name):
                     "temperature": 0.2
                 }
             )
-        elif model_name == "gemini-2.5-flash-preview-04-17":
+        elif model_name == "gemini-3-flash-preview":
             response = client.models.generate_content(
                 model=model_name,
                 contents=[prompt_template, image],

@@ -447,7 +447,7 @@ def main():
         None
     """
     logging.info("Starting Lassa fever report table extraction and sorting process")
-    process_reports_from_supabase(model_name="gemini-3.0-flash")
+    process_reports_from_supabase(model_name="gemini-3-flash-preview")
     logging.info("Finished LLM extraction process")
 
 if __name__ == "__main__":
