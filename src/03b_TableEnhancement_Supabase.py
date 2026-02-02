@@ -353,6 +353,7 @@ def process_reports_from_supabase():
             # Generate enhanced image name
             enhanced_name = f"Lines_{new_name.replace('.pdf', '')}_page3.png"
             output_path = ENHANCED_FOLDER / f"PDFs_Lines_{year}" / enhanced_name
+            output_path.parent.mkdir(parents=True, exist_ok=True)
             if output_path.exists():
                 logging.info(f"Enhanced image {enhanced_name} already exists in {output_path}")
                 update_enhanced_status(engine, report_id, enhanced_name)
