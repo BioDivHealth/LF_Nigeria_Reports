@@ -79,12 +79,12 @@ def main():
             if not data_dir.exists():
                 logging.error(f"Data directory not found at {data_dir}")
             else:
-                # Upload raw PDFs (only years 20-25)
+                # Upload raw PDFs (years 20–26+; any two-digit year folder under raw/year/)
                 raw_dir = data_dir / "raw"
                 if not raw_dir.exists():
                     logging.error(f"Raw directory not found at {raw_dir}")
                 else:
-                    logging.info(f"Uploading raw PDFs from {raw_dir} (only years 20-25)...")
+                    logging.info(f"Uploading raw PDFs from {raw_dir} (years 20–26+)...")
                     
                     # Get all year directories
                     year_dirs = [d for d in raw_dir.glob('year/*') if d.is_dir()]
@@ -92,12 +92,12 @@ def main():
                     if not year_dirs:
                         logging.warning(f"No year directories found in {raw_dir}/year/")
                     else:
-                        # Filter for years 20-25
-                        target_years = [f"{y}" for y in range(20, 26)]  # 20, 21, 22, 23, 24, 25
+                        # Include years 20–26 and beyond (two-digit: 20, 21, ..., 99)
+                        target_years = [f"{y}" for y in range(20, 100)]
                         filtered_dirs = [d for d in year_dirs if d.name in target_years]
                         
                         if not filtered_dirs:
-                            logging.warning(f"No year directories found matching years 20-25 in {raw_dir}/year/")
+                            logging.warning(f"No year directories found matching years 20+ in {raw_dir}/year/")
                         
                         # Upload each filtered year directory separately
                         for year_dir in filtered_dirs:

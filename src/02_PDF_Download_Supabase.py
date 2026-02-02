@@ -79,8 +79,8 @@ def sync_download_status(engine, b2_filenames: Set[str]):
             # 1. Sync Supabase to B2 (identify files marked downloaded in DB but NOT in B2)
             logging.info("Step 1: Syncing Supabase -> B2 (marking DB entries as NOT downloaded if not in B2)...")
             # Using 'downloaded' as text column with value 'Y' instead of boolean
-            # Only check records where year >= 20
-            stmt_select_downloaded_db = text(f"SELECT id::text, new_name FROM \"{SUPABASE_TABLE_NAME}\" WHERE downloaded = 'Y' AND (year >= 20 OR year >= '20') AND compatible != 'N'")
+            # Only check records where year >= 20; include compatible IS NULL (same as other scripts)
+            stmt_select_downloaded_db = text(f"SELECT id::text, new_name FROM \"{SUPABASE_TABLE_NAME}\" WHERE downloaded = 'Y' AND (year >= 20 OR year >= '20') AND (compatible IS NULL OR compatible = 'Y' OR compatible != 'N')")
             downloaded_in_db = session.execute(stmt_select_downloaded_db).fetchall()
             
             ids_to_mark_not_downloaded: List[str] = []
