@@ -5,7 +5,7 @@ This directory contains exported CSV files of Lassa fever case data from Nigeria
 ## Files
 
 - `lassa_data_latest.csv`: Always contains the most recent data export
-- `lassa_data_20260427.csv`: Timestamped version of the current export
+- `lassa_data_20260504.csv`: Timestamped version of the current export
 - Additional timestamped files: Historical exports
 
 ## Data Format
@@ -20,4 +20,4 @@ Each CSV file contains the following columns:
 - `hcw`: Number of healthcare worker cases
 - `deaths`: Number of deaths
 
-Last updated: 2026-04-27 04:35:55
+Last updated: 2026-05-04 04:46:04
