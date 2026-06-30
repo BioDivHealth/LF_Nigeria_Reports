@@ -17,12 +17,20 @@ The table has the following columns in this exact left-to-right order:
 6. HCW*
 7. Deaths (Confirmed Cases)
 
-Extract the values located under each column headers (States, Suspected, Confirmed, Probable, HCW*, Deaths (Confirmed Cases)) and return the results in JSON format. Do not hallucinate any values if a cell is empty. Process the table row by row.
+Extract the values located under each report column header and return the results in JSON format. Do not hallucinate any values if a cell is empty. Process the table row by row.
 Ignore the "Trend" column.
 Return a JSON list of objects, where each object corresponds to one row of the table.
 
+Use these exact JSON keys for the report columns:
+- report column labelled "States" -> JSON key "States"
+- report column labelled "Suspected" -> JSON key "Suspected"
+- report column labelled "Confirmed" -> JSON key "Confirmed"
+- report column labelled "Probable" -> JSON key "Probable"
+- report column labelled "HCW*" -> JSON key "HCW"
+- report column labelled "Deaths (Confirmed Cases)" -> JSON key "Deaths"
+
 Each object must have the following keys (exactly in this order):
-"States", "Suspected", "Confirmed", "Probable", "HCW*", "Deaths (Confirmed Cases)".
+"States", "Suspected", "Confirmed", "Probable", "HCW", "Deaths".
 
 **Important Validation Rules To Avoid Hallucination:**
 - Ensure all extracted numbers are non-negative integers.

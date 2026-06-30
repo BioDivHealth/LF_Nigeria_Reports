@@ -42,9 +42,7 @@ try:
     from utils.gemini_extractor import (
         extract_table_with_gemini, parse_gemini_response,
         log_extraction_differences, save_extracted_data_to_csv)
-    from utils.data_validation import (
-        validate_logical_consistency, sort_table_rows,
-        normalize_state_names, filter_comparison_columns)
+    from utils.extraction_validation import validate_extraction_results
     from utils.cloud_storage import download_file, get_b2_report_filenames
     from utils.db_utils import get_db_engine
 except ImportError:
@@ -52,9 +50,7 @@ except ImportError:
     from src.utils.gemini_extractor import (
         extract_table_with_gemini, parse_gemini_response,
         log_extraction_differences, save_extracted_data_to_csv)
-    from src.utils.data_validation import (
-        validate_logical_consistency, sort_table_rows,
-        normalize_state_names, filter_comparison_columns)
+    from src.utils.extraction_validation import validate_extraction_results
     from src.utils.cloud_storage import download_file, get_b2_report_filenames
     from src.utils.db_utils import get_db_engine
 
@@ -175,75 +171,6 @@ def get_enhanced_image(enhanced_name, year):
         logging.error(f"Error downloading enhanced image {enhanced_name}: {e}")
         return None
 
-def validate_extraction_results(parsed_data, enhanced_name, attempt, max_attempts):
-    """
-    Validate the logical consistency of extraction results and determine which data to use.
-    
-    Args:
-        parsed_data: List of parsed data from multiple extraction attempts
-        enhanced_name: Name of the enhanced image being processed
-        attempt: Current attempt number
-        max_attempts: Maximum number of attempts allowed
-        
-    Returns:
-        tuple: (should_continue, final_data)
-            - should_continue: True if we should continue to the next attempt
-            - final_data: The validated data to use, or None if should_continue is True
-    """
-    if len(parsed_data) < 2:
-        return True, None
-        
-    dict_rows_1, dict_rows_2 = parsed_data
-            
-    # Validate logical consistency in both iterations
-    is_valid_1, validated_rows_1, errors_1 = validate_logical_consistency(dict_rows_1)
-    is_valid_2, validated_rows_2, errors_2 = validate_logical_consistency(dict_rows_2)
-            
-    # Log any inconsistencies found
-    if not is_valid_1:
-        logging.warning(f"Logical inconsistencies found in iteration 1 for {enhanced_name}:")
-        for error in errors_1:
-            logging.warning(f"  - {error}")
-            
-    if not is_valid_2:
-        logging.warning(f"Logical inconsistencies found in iteration 2 for {enhanced_name}:")
-        for error in errors_2:
-            logging.warning(f"  - {error}")
-            
-    # If both iterations have inconsistencies and we haven't reached max attempts,
-    # try again with a new extraction
-    if not is_valid_1 and not is_valid_2 and attempt < max_attempts:
-        logging.warning(f"Both iterations have logical inconsistencies. Retrying extraction (attempt {attempt}/{max_attempts})")
-        attempt += 1
-        return True, None
-            
-    # If only one iteration has inconsistencies, use the consistent one
-    if is_valid_1 and not is_valid_2:
-        logging.info(f"Using iteration 1 data (iteration 2 had inconsistencies)")
-        dict_rows_2 = validated_rows_1  # Use the valid data for both
-    elif not is_valid_1 and is_valid_2:
-        logging.info(f"Using iteration 2 data (iteration 1 had inconsistencies)")
-        dict_rows_1 = validated_rows_2  # Use the valid data for both
-    elif not is_valid_1 and not is_valid_2:
-        # Both have inconsistencies and we've reached max attempts, use the validated (fixed) data
-        logging.warning(f"Both iterations have inconsistencies after {attempt}/{max_attempts} attempts. Using validated data.")
-        dict_rows_1 = validated_rows_1
-        dict_rows_2 = validated_rows_2
-            
-    # Create sorted versions for comparison
-    sorted_dict_rows_1 = sort_table_rows(dict_rows_1)
-    sorted_dict_rows_2 = sort_table_rows(dict_rows_2)
-            
-    # Normalize state names for comparison
-    normalized_1 = normalize_state_names(sorted_dict_rows_1)
-    normalized_2 = normalize_state_names(sorted_dict_rows_2)
-            
-    # Filter out irrelevant columns (HCW and Probable) for comparison
-    comparison_1 = filter_comparison_columns(normalized_1)
-    comparison_2 = filter_comparison_columns(normalized_2)
-    
-    return dict_rows_1, dict_rows_2,normalized_1, normalized_2, comparison_1, comparison_2
-
 def update_processing_status(engine, report_id, status='Y'):
     """
     Update the processed status in Supabase.
@@ -356,37 +283,47 @@ def process_single_report(report_metadata, model_name, engine):
                 continue
             
             # Validate the extraction results
-            dict_rows_1, dict_rows_2, normalized_1, normalized_2, comparison_1, comparison_2 = validate_extraction_results(
+            validation_result = validate_extraction_results(
                 parsed_data, enhanced_name, attempt, max_attempts
             )
-            
-            # Compare only the relevant columns
-            if comparison_1 == comparison_2:
-                logging.info(f"Both outputs are identical on relevant columns (States, Suspected, Confirmed, Deaths) on attempt {attempt}. Saving CSV.")
+
+            for warning in validation_result.warnings:
+                logging.warning(warning)
+            for error in validation_result.errors:
+                logging.warning(error)
+
+            if validation_result.status == "pass":
+                logging.info(f"Accepted extraction output on attempt {attempt}. Saving CSV.")
                 
                 # Save the data to CSV with Year and Week
-                if save_extracted_data_to_csv(dict_rows_1, output_path, fieldnames_table, year=year, week=week):
+                if save_extracted_data_to_csv(validation_result.selected_rows, output_path, fieldnames_table, year=year, week=week):
                     logging.info(f"Successfully processed: {base_filename}.csv")
                     update_processing_status(engine, report_id)
                     return True
                 else:
                     logging.error(f"Error writing CSV for image {enhanced_name}")
                     return False
-            else:
+
+            if validation_result.comparison_1 or validation_result.comparison_2:
                 logging.warning(f"Outputs differ on relevant columns (States, Suspected, Confirmed, Deaths) between iterations for image: {enhanced_name} (attempt {attempt}/{max_attempts})")
                 
                 # Record differences to a text file in the output directory
                 diff_file = output_dir / "differing_outputs.txt"
-                log_extraction_differences(diff_file, enhanced_name, attempt, max_attempts, normalized_1, normalized_2)
-                
-                # Increment the attempt counter and try again if we haven't reached the maximum
+                log_extraction_differences(
+                    diff_file,
+                    enhanced_name,
+                    attempt,
+                    max_attempts,
+                    validation_result.normalized_1,
+                    validation_result.normalized_2,
+                )
+
+            if validation_result.status == "retry":
                 attempt += 1
-                
-                # If this was the last attempt and outputs still differ, log a final message
-                if attempt > max_attempts:
-                    logging.error(f"Failed to get matching outputs after {max_attempts} attempts for image: {enhanced_name}")
-        
-            return True
+                continue
+
+            logging.error(f"Failed to get acceptable extraction output for image: {enhanced_name} (attempt {attempt}/{max_attempts})")
+            return False
         
         # If we've exhausted all attempts without success
         logging.error(f"Failed to extract consistent data after {max_attempts} attempts for {enhanced_name}")
