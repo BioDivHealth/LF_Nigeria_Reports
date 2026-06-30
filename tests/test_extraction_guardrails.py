@@ -1,8 +1,10 @@
 import importlib.util
+import json
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 
@@ -40,6 +42,26 @@ class ExtractionGuardrailTests(unittest.TestCase):
                 "Probable": "",
                 "HCW": "",
                 "Deaths": "",
+            },
+        ]
+
+    def source_anomaly_rows(self):
+        return [
+            {
+                "States": "Edo",
+                "Suspected": "20",
+                "Confirmed": "",
+                "Probable": "",
+                "HCW": "",
+                "Deaths": "1",
+            },
+            {
+                "States": "Total",
+                "Suspected": "20",
+                "Confirmed": "",
+                "Probable": "",
+                "HCW": "",
+                "Deaths": "1",
             },
         ]
 
@@ -117,6 +139,57 @@ class ExtractionGuardrailTests(unittest.TestCase):
         self.assertEqual("pass", result.status)
         self.assertEqual(valid_rows, result.selected_rows)
 
+    def test_validate_extraction_results_allows_matching_source_anomaly(self):
+        from src.utils.extraction_validation import validate_extraction_results
+
+        rows = self.source_anomaly_rows()
+
+        result = validate_extraction_results(
+            [rows, rows],
+            enhanced_name="Lines_Nigeria_24_Jan_26_W4_page3.png",
+            attempt=3,
+            max_attempts=3,
+        )
+
+        self.assertEqual("pass", result.status)
+        self.assertEqual(rows, result.selected_rows)
+        self.assertEqual("", result.selected_rows[0]["Confirmed"])
+        self.assertEqual([], result.errors)
+        self.assertTrue(any("source-table anomaly" in warning for warning in result.warnings))
+
+    def test_validate_extraction_results_retries_source_anomaly_when_other_output_imputes_confirmed(self):
+        from src.utils.extraction_validation import validate_extraction_results
+
+        blank_rows = self.source_anomaly_rows()
+        imputed_rows = self.source_anomaly_rows()
+        imputed_rows[0] = {**imputed_rows[0], "Confirmed": "1"}
+
+        result = validate_extraction_results(
+            [blank_rows, imputed_rows],
+            enhanced_name="Lines_Nigeria_24_Jan_26_W4_page3.png",
+            attempt=1,
+            max_attempts=3,
+        )
+
+        self.assertEqual("retry", result.status)
+        self.assertIsNone(result.selected_rows)
+
+    def test_validate_extraction_results_rejects_nonblank_confirmed_less_than_deaths(self):
+        from src.utils.extraction_validation import validate_extraction_results
+
+        invalid_rows = self.source_anomaly_rows()
+        invalid_rows[0] = {**invalid_rows[0], "Confirmed": "0"}
+
+        result = validate_extraction_results(
+            [invalid_rows, invalid_rows],
+            enhanced_name="Lines_Nigeria_24_Jan_26_W4_page3.png",
+            attempt=3,
+            max_attempts=3,
+        )
+
+        self.assertEqual("fail", result.status)
+        self.assertIsNone(result.selected_rows)
+
     def test_prompt_maps_report_headers_to_schema_keys(self):
         self.assertIn('report column labelled "HCW*"', TABLE_EXTRACTION_PROMPT)
         self.assertIn('JSON key "HCW"', TABLE_EXTRACTION_PROMPT)
@@ -163,16 +236,26 @@ class ExtractionGuardrailTests(unittest.TestCase):
                     ],
                 ), \
                 patch.object(module, "save_extracted_data_to_csv", return_value=True) as save_mock, \
+                patch.object(
+                    module,
+                    "validate_extracted_csv",
+                    return_value=SimpleNamespace(status="pass", errors=[], warnings=[], row_count=2),
+                ), \
                 patch.object(module, "update_processing_status") as update_mock, \
                 patch.object(module, "log_extraction_differences") as diff_mock:
 
                 success = module.process_single_report(report_metadata, "gemini-test", object())
+                qa_path = Path(temp_dir) / "CSV_LF_26_Sorted" / "Lines_Nigeria_01_Jan_26_W1_page3.extraction_qa.json"
+                qa = json.loads(qa_path.read_text(encoding="utf-8"))
 
         self.assertTrue(success)
         self.assertEqual(4, extract_mock.call_count)
         self.assertEqual(1, save_mock.call_count)
         self.assertEqual(1, update_mock.call_count)
         self.assertEqual(1, diff_mock.call_count)
+        self.assertEqual("pass", qa["status"])
+        self.assertEqual(2, qa["accepted_attempt"])
+        self.assertEqual("gemini-test", qa["model_name"])
 
 
 if __name__ == "__main__":

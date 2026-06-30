@@ -42,6 +42,12 @@ try:
     from utils.gemini_extractor import (
         extract_table_with_gemini, parse_gemini_response,
         log_extraction_differences, save_extracted_data_to_csv)
+    from utils.csv_qa import validate_extracted_csv
+    from utils.extraction_qa import (
+        default_layout_qa_path_for_enhanced_image,
+        read_extracted_csv_rows,
+        write_extraction_qa,
+    )
     from utils.extraction_validation import validate_extraction_results
     from utils.cloud_storage import download_file, get_b2_report_filenames
     from utils.db_utils import get_db_engine
@@ -50,6 +56,12 @@ except ImportError:
     from src.utils.gemini_extractor import (
         extract_table_with_gemini, parse_gemini_response,
         log_extraction_differences, save_extracted_data_to_csv)
+    from src.utils.csv_qa import validate_extracted_csv
+    from src.utils.extraction_qa import (
+        default_layout_qa_path_for_enhanced_image,
+        read_extracted_csv_rows,
+        write_extraction_qa,
+    )
     from src.utils.extraction_validation import validate_extraction_results
     from src.utils.cloud_storage import download_file, get_b2_report_filenames
     from src.utils.db_utils import get_db_engine
@@ -229,11 +241,36 @@ def process_single_report(report_metadata, model_name, engine):
     # Output CSV filename
     base_filename = os.path.splitext(enhanced_name)[0]
     output_path = output_dir / f"{base_filename}.csv"
+    extraction_qa_path = output_dir / f"{base_filename}.extraction_qa.json"
     
     # Check if output file already exists
     if output_path.exists():
         logging.info(f"Found existing processed file: {base_filename}.csv")
-        # Update status in Supabase if file exists locally
+
+        expected_year = f"20{year}" if len(str(year)) == 2 else str(year)
+        csv_qa_result = validate_extracted_csv(output_path, expected_year=expected_year, expected_week=week)
+        for warning in csv_qa_result.warnings:
+            logging.warning(f"Existing CSV QA warning for {base_filename}.csv: {warning}")
+
+        if csv_qa_result.status != "pass":
+            for error in csv_qa_result.errors:
+                logging.error(f"Existing CSV QA failed for {base_filename}.csv: {error}")
+            logging.error(f"Existing CSV failed QA and will not be marked processed: {output_path}")
+            return False
+
+        # Update status in Supabase only after the local CSV passes QA
+        extracted_rows = read_extracted_csv_rows(output_path)
+        write_extraction_qa(
+            extraction_qa_path,
+            enhanced_name=enhanced_name,
+            csv_path=output_path,
+            year=year,
+            week=week,
+            model_name=model_name,
+            status="pass",
+            selected_rows=extracted_rows,
+            csv_qa_result=csv_qa_result,
+        )
         update_processing_status(engine, report_id)
         return True
     
@@ -297,6 +334,31 @@ def process_single_report(report_metadata, model_name, engine):
                 
                 # Save the data to CSV with Year and Week
                 if save_extracted_data_to_csv(validation_result.selected_rows, output_path, fieldnames_table, year=year, week=week):
+                    expected_year = f"20{year}" if len(str(year)) == 2 else str(year)
+                    csv_qa_result = validate_extracted_csv(output_path, expected_year=expected_year, expected_week=week)
+                    for warning in csv_qa_result.warnings:
+                        logging.warning(f"CSV QA warning for {base_filename}.csv: {warning}")
+                    if csv_qa_result.status != "pass":
+                        for error in csv_qa_result.errors:
+                            logging.error(f"CSV QA failed for {base_filename}.csv: {error}")
+                        return False
+
+                    layout_qa_path = default_layout_qa_path_for_enhanced_image(input_path)
+                    write_extraction_qa(
+                        extraction_qa_path,
+                        enhanced_name=enhanced_name,
+                        csv_path=output_path,
+                        year=year,
+                        week=week,
+                        model_name=model_name,
+                        status="pass",
+                        accepted_attempt=attempt,
+                        max_attempts=max_attempts,
+                        selected_rows=validation_result.selected_rows,
+                        validation_result=validation_result,
+                        csv_qa_result=csv_qa_result,
+                        layout_qa_path=layout_qa_path,
+                    )
                     logging.info(f"Successfully processed: {base_filename}.csv")
                     update_processing_status(engine, report_id)
                     return True
