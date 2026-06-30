@@ -29,11 +29,11 @@ from dotenv import load_dotenv
 # Attempt to import utility functions, supporting both direct and main.py execution
 try:
     # For standalone execution
-    from utils.cloud_storage import upload_directory
+    from utils.cloud_storage import upload_directory, upload_file
     from utils.logging_config import configure_logging
 except ImportError:
     # When called from main.py
-    from src.utils.cloud_storage import upload_directory
+    from src.utils.cloud_storage import upload_directory, upload_file
     from src.utils.logging_config import configure_logging
 
 # Configure logging
@@ -53,6 +53,37 @@ B2_PREFIX = "lassa-reports"
 # Ensure the prefix ends with a slash if it's not empty and not just '/'
 if B2_PREFIX and B2_PREFIX != '/' and not B2_PREFIX.endswith('/'):
     B2_PREFIX += '/'
+
+
+def upload_matching_files(directory, b2_prefix, patterns, skip_if_exists=True):
+    """Upload only files matching exact glob patterns from a single directory."""
+    directory = Path(directory)
+    results = {"success": 0, "skipped": 0, "failed": 0, "total": 0}
+    if not directory.exists():
+        logging.info(f"No directory found for sidecar upload: {directory}")
+        return results
+
+    seen = set()
+    files_to_upload = []
+    for pattern in patterns:
+        for file_path in directory.glob(pattern):
+            if file_path.is_file() and file_path not in seen:
+                files_to_upload.append(file_path)
+                seen.add(file_path)
+
+    results["total"] = len(files_to_upload)
+    if not files_to_upload:
+        logging.info(f"No sidecars matching {patterns} found in {directory}")
+        return results
+
+    for file_path in files_to_upload:
+        b2_key = f"{b2_prefix}/{file_path.name}"
+        if upload_file(file_path, b2_key=b2_key, skip_if_exists=skip_if_exists):
+            results["success"] += 1
+        else:
+            results["failed"] += 1
+
+    return results
 
 
 def main():
@@ -153,6 +184,17 @@ def main():
                                 # Update total stats
                                 for key in ['success', 'skipped', 'failed', 'total']:
                                     total_stats[key] += results.get(key, 0)
+
+                                logging.info(f"Uploading layout QA sidecars for year {year}...")
+                                qa_results = upload_matching_files(
+                                    pdf_lines_dir,
+                                    b2_prefix=f"{B2_PREFIX}data/processed/PDF/{pdf_lines_dir.name}",
+                                    patterns=["*.layout_qa.json"],
+                                    skip_if_exists=False
+                                )
+                                logging.info(f"Layout QA sidecars for year {year}: {qa_results['success']} uploaded, {qa_results['skipped']} skipped, {qa_results['failed']} failed")
+                                for key in ['success', 'skipped', 'failed', 'total']:
+                                    total_stats[key] += qa_results.get(key, 0)
                         except Exception as e:
                             logging.error(f"Error processing PDF directory {pdf_lines_dir.name}: {str(e)}", exc_info=True)
         except Exception as e:
@@ -185,6 +227,17 @@ def main():
                             # Update total stats
                             for key in ['success', 'skipped', 'failed', 'total']:
                                 total_stats[key] += results.get(key, 0)
+
+                            logging.info(f"Uploading extraction QA sidecars for year {year}...")
+                            qa_results = upload_matching_files(
+                                year_csv_dir,
+                                b2_prefix=f"{B2_PREFIX}data/processed/CSV/{year_csv_dir.name}",
+                                patterns=["*.extraction_qa.json", "differing_outputs.txt"],
+                                skip_if_exists=False
+                            )
+                            logging.info(f"Extraction QA sidecars for year {year}: {qa_results['success']} uploaded, {qa_results['skipped']} skipped, {qa_results['failed']} failed")
+                            for key in ['success', 'skipped', 'failed', 'total']:
+                                total_stats[key] += qa_results.get(key, 0)
                     except Exception as e:
                         logging.error(f"Error processing CSV directory {year_csv_dir.name}: {str(e)}", exc_info=True)
         except Exception as e:

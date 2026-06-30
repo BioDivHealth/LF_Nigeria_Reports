@@ -46,6 +46,22 @@ def csv_name_for_report(new_name, enhanced_name=None):
     return csv_name_for_enhanced(enhanced_name_for_report(new_name, enhanced_name))
 
 
+def layout_qa_name_for_enhanced(enhanced_name):
+    """Return the layout QA sidecar filename for an enhanced image filename."""
+    clean_enhanced_name = _clean_name(enhanced_name)
+    if not clean_enhanced_name:
+        return None
+    return f"{Path(clean_enhanced_name).stem}.layout_qa.json"
+
+
+def extraction_qa_name_for_csv(csv_name):
+    """Return the extraction QA sidecar filename for a processed CSV filename."""
+    clean_csv_name = _clean_name(csv_name)
+    if not clean_csv_name:
+        return None
+    return f"{Path(clean_csv_name).stem}.extraction_qa.json"
+
+
 def enhanced_image_path(base_dir, year, enhanced_name):
     """Return the local enhanced image path for a year folder and artifact name."""
     clean_enhanced_name = _clean_name(enhanced_name)

@@ -33,15 +33,19 @@ from sqlalchemy.orm import Session
 
 # Attempt to import utility functions, supporting both direct and main.py execution
 try:
-    from utils.artifact_paths import csv_name_for_report
+    from utils.artifact_paths import csv_name_for_report, extraction_qa_path_for_csv_path
+    from utils.csv_qa import validate_extracted_csv
     from utils.db_utils import get_db_engine, get_existing_records
     from utils.logging_config import configure_logging
     from utils.cloud_storage import get_b2_report_filenames, download_file
+    from utils.status_qa import check_extraction_qa_file
 except ImportError:
-    from src.utils.artifact_paths import csv_name_for_report
+    from src.utils.artifact_paths import csv_name_for_report, extraction_qa_path_for_csv_path
+    from src.utils.csv_qa import validate_extracted_csv
     from src.utils.db_utils import get_db_engine, get_existing_records
     from src.utils.logging_config import configure_logging
     from src.utils.cloud_storage import get_b2_report_filenames, download_file
+    from src.utils.status_qa import check_extraction_qa_file
 
 # Configure logging
 configure_logging()
@@ -67,6 +71,26 @@ DOWNLOADED_CONDITION = "downloaded = 'Y'"
 PROCESSED_CONDITION = "processed = 'Y'"
 
 # --- Functions -----------------------------
+
+def _expected_year(year):
+    return f"20{year}" if len(str(year)) == 2 else str(year)
+
+
+def csv_artifact_passes_qa(csv_path: Path, year, week) -> bool:
+    csv_qa_result = validate_extracted_csv(csv_path, expected_year=_expected_year(year), expected_week=week)
+    if csv_qa_result.status != "pass":
+        logging.info(f"CSV QA failed for {csv_path.name}: {'; '.join(csv_qa_result.errors)}")
+        return False
+
+    extraction_qa_path = extraction_qa_path_for_csv_path(csv_path)
+    if extraction_qa_path and extraction_qa_path.exists():
+        extraction_qa_result = check_extraction_qa_file(extraction_qa_path)
+        if not extraction_qa_result.ok:
+            logging.info(f"Extraction QA failed for {csv_path.name}: {extraction_qa_result.reason}")
+            return False
+
+    return True
+
 
 def find_local_csv_files() -> Dict[str, Path]:
     """
@@ -183,9 +207,15 @@ def sync_combining_status(engine):
     ids_to_mark_combined = []
     
     # Find reports that are in lassa_data but not marked as combined
-    for csv_name, (report_id, _, _, combined) in report_map.items():
+    for csv_name, (report_id, year, week, combined) in report_map.items():
         logging.info(f"Checking report {report_id} (CSV: {csv_name})")
         if report_id in reports_in_lassa_data and combined != 'Y':
+            if csv_name not in local_csv_files:
+                logging.info(f"Report {report_id} is in lassa_data but local CSV {csv_name} is unavailable; not marking combined.")
+                continue
+            if not csv_artifact_passes_qa(local_csv_files[csv_name], year, week):
+                logging.info(f"Report {report_id} is in lassa_data but {csv_name} did not pass QA; not marking combined.")
+                continue
             ids_to_mark_combined.append(report_id)
             logging.info(f"Report {report_id} (CSV: {csv_name}) is in lassa_data but not marked as combined")
     

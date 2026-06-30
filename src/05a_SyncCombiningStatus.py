@@ -33,15 +33,27 @@ from sqlalchemy.orm import Session
 
 # Attempt to import utility functions, supporting both direct and main.py execution
 try:
-    from utils.artifact_paths import csv_name_for_report
+    from utils.artifact_paths import (
+        csv_name_for_report,
+        extraction_qa_name_for_csv,
+        extraction_qa_path_for_csv_path,
+    )
+    from utils.csv_qa import validate_extracted_csv
     from utils.db_utils import get_db_engine, get_existing_records
     from utils.logging_config import configure_logging
     from utils.cloud_storage import get_b2_report_filenames, download_file
+    from utils.status_qa import check_extraction_qa_file
 except ImportError:
-    from src.utils.artifact_paths import csv_name_for_report
+    from src.utils.artifact_paths import (
+        csv_name_for_report,
+        extraction_qa_name_for_csv,
+        extraction_qa_path_for_csv_path,
+    )
+    from src.utils.csv_qa import validate_extracted_csv
     from src.utils.db_utils import get_db_engine, get_existing_records
     from src.utils.logging_config import configure_logging
     from src.utils.cloud_storage import get_b2_report_filenames, download_file
+    from src.utils.status_qa import check_extraction_qa_file
 
 # Configure logging
 configure_logging()
@@ -67,6 +79,30 @@ DOWNLOADED_CONDITION = "downloaded = 'Y'"
 PROCESSED_CONDITION = "processed = 'Y'"
 
 # --- Functions -----------------------------
+
+def _expected_year(year):
+    return f"20{year}" if len(str(year)) == 2 else str(year)
+
+
+def _csv_b2_key(year, filename):
+    return f"{B2_REPORTS_PREFIX}CSV_LF_{year}_Sorted/{filename}"
+
+
+def csv_artifact_passes_qa(csv_path: Path, year, week) -> bool:
+    csv_qa_result = validate_extracted_csv(csv_path, expected_year=_expected_year(year), expected_week=week)
+    if csv_qa_result.status != "pass":
+        logging.info(f"CSV QA failed for {csv_path.name}: {'; '.join(csv_qa_result.errors)}")
+        return False
+
+    extraction_qa_path = extraction_qa_path_for_csv_path(csv_path)
+    if extraction_qa_path and extraction_qa_path.exists():
+        extraction_qa_result = check_extraction_qa_file(extraction_qa_path)
+        if not extraction_qa_result.ok:
+            logging.info(f"Extraction QA failed for {csv_path.name}: {extraction_qa_result.reason}")
+            return False
+
+    return True
+
 
 def find_local_csv_files() -> Dict[str, Path]:
     """
@@ -155,7 +191,22 @@ def update_combined_status(engine, report_ids: List[str], status: str = 'Y'):
             session.rollback()
             logging.error(f"Error updating combined status: {e}", exc_info=True)
 
-def download_missing_csv_files(b2_files: Set[str], local_files: Dict[str, Path], year_mapping: Dict[str, str]) -> Dict[str, Path]:
+def _download_extraction_qa_if_available(csv_name, year, b2_extraction_qa_files):
+    extraction_qa_name = extraction_qa_name_for_csv(csv_name)
+    if not extraction_qa_name or extraction_qa_name not in b2_extraction_qa_files:
+        return
+
+    year_dir = CSV_BASE_FOLDER / f"CSV_LF_{year}_Sorted"
+    extraction_qa_path = year_dir / extraction_qa_name
+    b2_path = _csv_b2_key(year, extraction_qa_name)
+    success = download_file(b2_path, extraction_qa_path)
+    if success:
+        logging.info(f"Successfully downloaded {extraction_qa_name} to {extraction_qa_path}")
+    else:
+        logging.warning(f"Failed to download extraction QA sidecar {extraction_qa_name}")
+
+
+def download_missing_csv_files(b2_files: Set[str], local_files: Dict[str, Path], year_mapping: Dict[str, str], b2_extraction_qa_files: Optional[Set[str]] = None) -> Dict[str, Path]:
     """
     Download missing CSV files from B2.
     
@@ -181,6 +232,8 @@ def download_missing_csv_files(b2_files: Set[str], local_files: Dict[str, Path],
     logging.info(f"Need to download {len(files_to_download)} CSV files from B2")
     
     # Download each missing file
+    b2_extraction_qa_files = b2_extraction_qa_files or set()
+
     for csv_name in files_to_download:
         year = year_mapping.get(csv_name, "Unknown")
         # Create year directory if needed
@@ -191,13 +244,14 @@ def download_missing_csv_files(b2_files: Set[str], local_files: Dict[str, Path],
         local_path = year_dir / csv_name
         
         # Set B2 path
-        b2_path = f"{B2_REPORTS_PREFIX}CSV_LF_{year}_Sorted/{csv_name}"
+        b2_path = _csv_b2_key(year, csv_name)
         
         # Download the file
         success = download_file(b2_path, local_path)
         if success:
             local_files[csv_name] = local_path
             logging.info(f"Successfully downloaded {csv_name} to {local_path}")
+            _download_extraction_qa_if_available(csv_name, year, b2_extraction_qa_files)
         else:
             logging.error(f"Failed to download {csv_name}")
     
@@ -220,6 +274,9 @@ def get_csvs_to_combine(report_map: Dict[str, Tuple[str, str, str, str]], local_
     for csv_name, (report_id, year, week, combined) in report_map.items():
         # If the file exists locally and hasn't been combined yet
         if csv_name in local_files and combined != 'Y':
+            if not csv_artifact_passes_qa(local_files[csv_name], year, week):
+                logging.info(f"Skipping {csv_name}; CSV/extraction QA did not pass.")
+                continue
             to_combine[csv_name] = (local_files[csv_name], report_id, year, week)
     
     return to_combine
@@ -239,6 +296,8 @@ def sync_combining_status(engine):
     # Get all CSV files in B2
     b2_csv_files = get_b2_report_filenames(B2_REPORTS_PREFIX, ".csv")
     logging.info(f"Found {len(b2_csv_files)} CSV files in B2")
+    b2_extraction_qa_files = get_b2_report_filenames(B2_REPORTS_PREFIX, ".extraction_qa.json")
+    logging.info(f"Found {len(b2_extraction_qa_files)} extraction QA files in B2")
     
     # Get local CSV files
     local_csv_files = find_local_csv_files()
@@ -278,13 +337,14 @@ def sync_combining_status(engine):
             local_path = year_dir / csv_name
             
             # Set B2 path
-            b2_path = f"{B2_REPORTS_PREFIX}CSV_LF_{year}_Sorted/{csv_name}"
+            b2_path = _csv_b2_key(year, csv_name)
             
             # Download the file
             success = download_file(b2_path, local_path)
             if success:
                 local_csv_files[csv_name] = local_path
                 logging.info(f"Successfully downloaded {csv_name} to {local_path}")
+                _download_extraction_qa_if_available(csv_name, year, b2_extraction_qa_files)
             else:
                 logging.error(f"Failed to download {csv_name}")
     else:
@@ -294,9 +354,15 @@ def sync_combining_status(engine):
     ids_to_mark_combined = []
     
     # Find reports that are in lassa_data but not marked as combined
-    for csv_name, (report_id, _, _, combined) in report_map.items():
+    for csv_name, (report_id, year, week, combined) in report_map.items():
         logging.info(f"Checking report {report_id} (CSV: {csv_name})")
         if report_id in reports_in_lassa_data and combined != 'Y':
+            if csv_name not in local_csv_files:
+                logging.info(f"Report {report_id} is in lassa_data but local CSV {csv_name} is unavailable; not marking combined.")
+                continue
+            if not csv_artifact_passes_qa(local_csv_files[csv_name], year, week):
+                logging.info(f"Report {report_id} is in lassa_data but {csv_name} did not pass QA; not marking combined.")
+                continue
             ids_to_mark_combined.append(report_id)
             logging.info(f"Report {report_id} (CSV: {csv_name}) is in lassa_data but not marked as combined")
     

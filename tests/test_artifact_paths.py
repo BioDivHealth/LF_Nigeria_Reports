@@ -7,7 +7,9 @@ from src.utils.artifact_paths import (
     csv_path,
     enhanced_image_path,
     enhanced_name_for_report,
+    extraction_qa_name_for_csv,
     extraction_qa_path_for_csv_path,
+    layout_qa_name_for_enhanced,
     layout_qa_path_for_enhanced_path,
     legacy_enhanced_name_from_pdf,
 )
@@ -80,12 +82,24 @@ class ArtifactPathTests(unittest.TestCase):
             extraction_qa_path_for_csv_path(csv_file_path),
         )
 
+    def test_sidecar_names_derive_from_artifact_stems(self):
+        self.assertEqual(
+            "Lines_Test_page3.layout_qa.json",
+            layout_qa_name_for_enhanced("Lines_Test_page3.png"),
+        )
+        self.assertEqual(
+            "Lines_Test_page3.extraction_qa.json",
+            extraction_qa_name_for_csv("Lines_Test_page3.csv"),
+        )
+
     def test_blank_or_missing_names_return_none(self):
         self.assertIsNone(legacy_enhanced_name_from_pdf(None))
         self.assertIsNone(legacy_enhanced_name_from_pdf(""))
         self.assertIsNone(enhanced_name_for_report(None))
         self.assertIsNone(csv_name_for_enhanced(""))
         self.assertIsNone(csv_name_for_report(None))
+        self.assertIsNone(layout_qa_name_for_enhanced(""))
+        self.assertIsNone(extraction_qa_name_for_csv(""))
         self.assertIsNone(enhanced_image_path("/tmp/lassa", "26", ""))
         self.assertIsNone(enhanced_image_path(None, "26", "Lines_Test_page3.png"))
         self.assertIsNone(csv_path("/tmp/lassa", "26", ""))

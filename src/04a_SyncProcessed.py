@@ -37,16 +37,30 @@ from sqlalchemy.orm import Session
 
 # Attempt to import utility functions, supporting both direct and main.py execution
 try:
-    from utils.artifact_paths import csv_name_for_report
+    from utils.artifact_paths import (
+        csv_name_for_report,
+        csv_path,
+        extraction_qa_name_for_csv,
+        extraction_qa_path_for_csv_path,
+    )
+    from utils.csv_qa import validate_extracted_csv
     from utils.db_utils import get_db_engine
     from utils.logging_config import configure_logging
-    from utils.cloud_storage import get_b2_report_filenames 
+    from utils.cloud_storage import download_file, get_b2_report_filenames
+    from utils.status_qa import QAStatusResult, check_extraction_qa_file
 except ImportError:
     # This fallback is for when the script is run from the project root as part of main.py
-    from src.utils.artifact_paths import csv_name_for_report
+    from src.utils.artifact_paths import (
+        csv_name_for_report,
+        csv_path,
+        extraction_qa_name_for_csv,
+        extraction_qa_path_for_csv_path,
+    )
+    from src.utils.csv_qa import validate_extracted_csv
     from src.utils.db_utils import get_db_engine
     from src.utils.logging_config import configure_logging
-    from src.utils.cloud_storage import get_b2_report_filenames
+    from src.utils.cloud_storage import download_file, get_b2_report_filenames
+    from src.utils.status_qa import QAStatusResult, check_extraction_qa_file
 
 # Configure logging
 configure_logging()
@@ -63,6 +77,9 @@ B2_REPORTS_PREFIX = "lassa-reports/data/processed/CSV/"
 if B2_REPORTS_PREFIX and B2_REPORTS_PREFIX != '/' and not B2_REPORTS_PREFIX.endswith('/'):
     B2_REPORTS_PREFIX += '/'
 
+BASE_DIR = Path(__file__).parent.parent
+CSV_BASE_FOLDER = BASE_DIR / 'data' / 'processed' / 'CSV'
+
 # --- Common SQL Conditions ---------------------------------
 # Common SQL query conditions to maintain consistency
 COMMON_YEAR_CONDITION = "(year >= 20 OR year >= '20')"
@@ -70,7 +87,67 @@ COMPATIBILITY_CONDITION = "(compatible IS NULL OR compatible = 'Y' OR compatible
 DOWNLOADED_CONDITION = "downloaded = 'Y'"
 # --- Functions -----------------------------
 
-def sync_processed_status(engine, b2_filenames: Set[str]):
+def _expected_year(year):
+    return f"20{year}" if len(str(year)) == 2 else str(year)
+
+
+def _csv_b2_key(year, csv_name):
+    return f"{B2_REPORTS_PREFIX}CSV_LF_{year}_Sorted/{csv_name}"
+
+
+def _download_csv_if_needed(year, csv_name):
+    local_csv_path = csv_path(CSV_BASE_FOLDER, year, csv_name)
+    if not local_csv_path:
+        return None, QAStatusResult(ok=False, reason=f"Could not derive local CSV path for {csv_name}.", present=False)
+    if local_csv_path.exists():
+        return local_csv_path, QAStatusResult(ok=True, reason=f"Found local CSV: {local_csv_path}")
+
+    b2_key = _csv_b2_key(year, csv_name)
+    if not download_file(b2_key, local_csv_path):
+        return local_csv_path, QAStatusResult(ok=False, reason=f"Could not download CSV from B2: {b2_key}", present=False)
+    return local_csv_path, QAStatusResult(ok=True, reason=f"Downloaded CSV from B2: {b2_key}")
+
+
+def _download_extraction_qa_if_available(year, csv_name, b2_extraction_qa_filenames):
+    local_csv_path = csv_path(CSV_BASE_FOLDER, year, csv_name)
+    extraction_qa_path = extraction_qa_path_for_csv_path(local_csv_path)
+    extraction_qa_name = extraction_qa_name_for_csv(csv_name)
+    if not extraction_qa_path or not extraction_qa_name:
+        return extraction_qa_path
+    if extraction_qa_path.exists():
+        return extraction_qa_path
+    if extraction_qa_name not in b2_extraction_qa_filenames:
+        return extraction_qa_path
+
+    b2_key = _csv_b2_key(year, extraction_qa_name)
+    if not download_file(b2_key, extraction_qa_path):
+        logging.warning(f"Could not download extraction QA sidecar from B2: {b2_key}")
+    return extraction_qa_path
+
+
+def _check_processed_artifact(year, week, csv_name, b2_filenames, b2_extraction_qa_filenames, require_extraction_qa=False):
+    if csv_name not in b2_filenames:
+        return QAStatusResult(ok=False, reason=f"CSV is missing in B2: {csv_name}", present=False)
+
+    local_csv_path, download_result = _download_csv_if_needed(year, csv_name)
+    if not download_result.ok:
+        return download_result
+
+    csv_qa_result = validate_extracted_csv(local_csv_path, expected_year=_expected_year(year), expected_week=week)
+    if csv_qa_result.status != "pass":
+        return QAStatusResult(ok=False, reason=f"CSV QA failed for {csv_name}: {'; '.join(csv_qa_result.errors)}", present=True)
+
+    extraction_qa_path = _download_extraction_qa_if_available(year, csv_name, b2_extraction_qa_filenames)
+    extraction_qa_result = check_extraction_qa_file(extraction_qa_path)
+    if extraction_qa_result.present and not extraction_qa_result.ok:
+        return extraction_qa_result
+    if require_extraction_qa and not extraction_qa_result.present:
+        return extraction_qa_result
+
+    return QAStatusResult(ok=True, reason=f"Processed artifact QA passed for {csv_name}")
+
+
+def sync_processed_status(engine, b2_filenames: Set[str], b2_extraction_qa_filenames: Optional[Set[str]] = None):
     """
     Synchronizes the 'processed' status in the Supabase 'website_data' table
     with the list of CSV filenames found in B2.
@@ -80,13 +157,15 @@ def sync_processed_status(engine, b2_filenames: Set[str]):
         b2_filenames (Set[str]): A set of CSV filenames found in B2.
     """
     
+    b2_extraction_qa_filenames = b2_extraction_qa_filenames or set()
+
     with Session(engine) as session:
         try:
             # 1. Sync Supabase to B2 (identify files marked processed in DB but NOT in B2)
             logging.info("Step 1: Syncing Supabase -> B2 (marking DB entries as NOT processed if CSV not in B2)...")
             # Using 'processed' as text column with value 'Y' instead of boolean
             query = text(f"""
-                SELECT id::text, new_name, enhanced_name
+                SELECT id::text, new_name, enhanced_name, year, week
                 FROM "{SUPABASE_TABLE_NAME}" 
                 WHERE processed = 'Y' 
                 AND {COMMON_YEAR_CONDITION}
@@ -95,11 +174,11 @@ def sync_processed_status(engine, b2_filenames: Set[str]):
             """)
             
             result = session.execute(query)
-            records_marked_processed = [(row[0], row[1], row[2]) for row in result]
+            records_marked_processed = [(row[0], row[1], row[2], row[3], row[4]) for row in result]
             logging.info(f"Found {len(records_marked_processed)} records marked as processed in Supabase")
             
             ids_to_mark_not_processed: List[str] = []
-            for row_id_text, pdf_name, enhanced_name in records_marked_processed:
+            for row_id_text, pdf_name, enhanced_name, year, week in records_marked_processed:
                 expected_csv_name = csv_name_for_report(pdf_name, enhanced_name)
                 if not expected_csv_name:
                     continue
@@ -107,6 +186,20 @@ def sync_processed_status(engine, b2_filenames: Set[str]):
                 if expected_csv_name not in b2_filenames:
                     ids_to_mark_not_processed.append(row_id_text)
                     logging.info(f"File '{expected_csv_name}' (ID: {row_id_text}) is marked as 'processed' in DB but not found in B2. Queueing to mark as N.")
+                    continue
+
+                qa_result = _check_processed_artifact(
+                    year, week, expected_csv_name, b2_filenames, b2_extraction_qa_filenames
+                )
+                if qa_result.present and not qa_result.ok:
+                    ids_to_mark_not_processed.append(row_id_text)
+                    logging.info(
+                        f"Processed artifact QA failed for '{expected_csv_name}' (ID: {row_id_text}): {qa_result.reason}. Queueing to mark as N."
+                    )
+                elif not qa_result.present:
+                    logging.info(
+                        f"Processed artifact QA is unavailable for existing record '{expected_csv_name}' (ID: {row_id_text}): {qa_result.reason}. Preserving historical processed=Y."
+                    )
             
             if ids_to_mark_not_processed:
                 update_false_stmt = text(
@@ -122,7 +215,7 @@ def sync_processed_status(engine, b2_filenames: Set[str]):
             # 2. Sync B2 to Supabase (identify files in B2 but not marked processed in DB)
             logging.info("Step 2: Syncing B2 -> Supabase (marking DB entries as processed if CSV in B2)...")
             query = text(f"""
-                SELECT id::text, new_name, enhanced_name
+                SELECT id::text, new_name, enhanced_name, year, week
                 FROM "{SUPABASE_TABLE_NAME}" 
                 WHERE (processed IS NULL OR processed != 'Y') 
                 AND {COMMON_YEAR_CONDITION}
@@ -131,16 +224,37 @@ def sync_processed_status(engine, b2_filenames: Set[str]):
             """)
             
             result = session.execute(query)
-            records_needing_processing = [(row[0], row[1], row[2]) for row in result]
+            records_needing_processing = [(row[0], row[1], row[2], row[3], row[4]) for row in result]
             logging.info(f"Found {len(records_needing_processing)} records needing processing status update")
             ids_to_mark_processed: List[str] = []
-            for row_id_text, pdf_name, enhanced_name in records_needing_processing:
+            for row_id_text, pdf_name, enhanced_name, year, week in records_needing_processing:
                 expected_csv_name = csv_name_for_report(pdf_name, enhanced_name)
                 if not expected_csv_name:
                     continue
                 logging.info(f"Expected CSV name: {expected_csv_name}")
                 # Check if this file exists in B2
                 if expected_csv_name in b2_filenames:
+                    expected_extraction_qa_name = extraction_qa_name_for_csv(expected_csv_name)
+                    if expected_extraction_qa_name not in b2_extraction_qa_filenames:
+                        logging.info(
+                            f"File '{expected_csv_name}' (ID: {row_id_text}) is in B2 but extraction QA sidecar is missing in B2. Not marking processed."
+                        )
+                        continue
+
+                    qa_result = _check_processed_artifact(
+                        year,
+                        week,
+                        expected_csv_name,
+                        b2_filenames,
+                        b2_extraction_qa_filenames,
+                        require_extraction_qa=True,
+                    )
+                    if not qa_result.ok:
+                        logging.info(
+                            f"File '{expected_csv_name}' (ID: {row_id_text}) is in B2 but processed QA did not pass: {qa_result.reason}. Not marking processed."
+                        )
+                        continue
+
                     ids_to_mark_processed.append(row_id_text)
                     logging.info(f"File '{expected_csv_name}' (ID: {row_id_text}) is in B2 but not marked as 'processed' in DB. Queueing to mark as Y.")
 
@@ -195,9 +309,10 @@ def main():
         return
 
     b2_report_files = get_b2_report_filenames(B2_REPORTS_PREFIX, ".csv")
+    b2_extraction_qa_files = get_b2_report_filenames(B2_REPORTS_PREFIX, ".extraction_qa.json")
     
     # Proceed with sync even if b2_report_files is empty; sync_processed_status handles this.
-    sync_processed_status(engine, b2_report_files)
+    sync_processed_status(engine, b2_report_files, b2_extraction_qa_files)
     
     logging.info("Lassa Fever Report Processed Status Synchronizer finished.")
 

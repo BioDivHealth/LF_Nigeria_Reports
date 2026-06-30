@@ -37,16 +37,28 @@ from sqlalchemy.orm import Session
 
 # Attempt to import utility functions, supporting both direct and main.py execution
 try:
-    from utils.artifact_paths import enhanced_name_for_report
+    from utils.artifact_paths import (
+        enhanced_image_path,
+        enhanced_name_for_report,
+        layout_qa_name_for_enhanced,
+        layout_qa_path_for_enhanced_path,
+    )
     from utils.db_utils import get_db_engine
     from utils.logging_config import configure_logging
-    from utils.cloud_storage import get_b2_report_filenames 
+    from utils.cloud_storage import download_file, get_b2_report_filenames
+    from utils.status_qa import QAStatusResult, check_layout_qa_file
 except ImportError:
     # This fallback is for when the script is run from the project root as part of main.py
-    from src.utils.artifact_paths import enhanced_name_for_report
+    from src.utils.artifact_paths import (
+        enhanced_image_path,
+        enhanced_name_for_report,
+        layout_qa_name_for_enhanced,
+        layout_qa_path_for_enhanced_path,
+    )
     from src.utils.db_utils import get_db_engine
     from src.utils.logging_config import configure_logging
-    from src.utils.cloud_storage import get_b2_report_filenames
+    from src.utils.cloud_storage import download_file, get_b2_report_filenames
+    from src.utils.status_qa import QAStatusResult, check_layout_qa_file
 
 # Configure logging
 configure_logging()
@@ -63,6 +75,9 @@ B2_REPORTS_PREFIX = "lassa-reports/data/processed/PDF/"
 if B2_REPORTS_PREFIX and B2_REPORTS_PREFIX != '/' and not B2_REPORTS_PREFIX.endswith('/'):
     B2_REPORTS_PREFIX += '/'
 
+BASE_DIR = Path(__file__).parent.parent
+ENHANCED_FOLDER = BASE_DIR / 'data' / 'processed' / 'PDF'
+
 # --- Common SQL Conditions ---------------------------------
 # Common SQL query conditions to maintain consistency
 COMMON_YEAR_CONDITION = "(year >= 20 OR year >= '20')"
@@ -70,7 +85,35 @@ COMPATIBILITY_CONDITION = "(compatible IS NULL OR compatible = 'Y' OR compatible
 DOWNLOADED_CONDITION = "downloaded = 'Y'"
 # --- Functions -----------------------------
 
-def sync_enhanced_status(engine, b2_filenames: Set[str]):
+def _layout_qa_b2_key(year, layout_qa_name):
+    return f"{B2_REPORTS_PREFIX}PDFs_Lines_{year}/{layout_qa_name}"
+
+
+def _local_layout_qa_path(year, enhanced_name):
+    enhanced_path = enhanced_image_path(ENHANCED_FOLDER, year, enhanced_name)
+    return layout_qa_path_for_enhanced_path(enhanced_path)
+
+
+def _check_layout_qa_from_b2(year, enhanced_name, b2_layout_qa_filenames):
+    layout_qa_name = layout_qa_name_for_enhanced(enhanced_name)
+    layout_qa_path = _local_layout_qa_path(year, enhanced_name)
+    if not layout_qa_name or not layout_qa_path:
+        return check_layout_qa_file(None)
+
+    if layout_qa_path.exists():
+        return check_layout_qa_file(layout_qa_path)
+
+    if layout_qa_name not in b2_layout_qa_filenames:
+        return check_layout_qa_file(layout_qa_path)
+
+    b2_key = _layout_qa_b2_key(year, layout_qa_name)
+    if not download_file(b2_key, layout_qa_path):
+        return QAStatusResult(ok=False, reason=f"Could not download layout QA sidecar from B2: {b2_key}", present=True)
+
+    return check_layout_qa_file(layout_qa_path)
+
+
+def sync_enhanced_status(engine, b2_filenames: Set[str], b2_layout_qa_filenames: Optional[Set[str]] = None):
     """
     Synchronizes the 'enhanced' status in the Supabase 'website_data' table
     with the list of enhanced image filenames found in B2.
@@ -80,16 +123,18 @@ def sync_enhanced_status(engine, b2_filenames: Set[str]):
         b2_filenames (Set[str]): A set of enhanced image filenames found in B2.
     """
     
+    b2_layout_qa_filenames = b2_layout_qa_filenames or set()
+
     with Session(engine) as session:
         try:
             # 1. Sync Supabase to B2 (identify files marked enhanced in DB but NOT in B2)
             logging.info("Step 1: Syncing Supabase -> B2 (marking DB entries as NOT enhanced if not in B2)...")
             # Using 'enhanced' as text column with value 'Y' instead of boolean
-            stmt_select_enhanced_db = text(f"SELECT id::text, enhanced_name, new_name FROM \"{SUPABASE_TABLE_NAME}\" WHERE enhanced = 'Y' AND {DOWNLOADED_CONDITION} AND {COMMON_YEAR_CONDITION} AND {COMPATIBILITY_CONDITION}")
+            stmt_select_enhanced_db = text(f"SELECT id::text, enhanced_name, new_name, year FROM \"{SUPABASE_TABLE_NAME}\" WHERE enhanced = 'Y' AND {DOWNLOADED_CONDITION} AND {COMMON_YEAR_CONDITION} AND {COMPATIBILITY_CONDITION}")
             enhanced_in_db = session.execute(stmt_select_enhanced_db).fetchall()
             
             ids_to_mark_not_enhanced: List[str] = []
-            for row_id_text, enhanced_name, new_name in enhanced_in_db:
+            for row_id_text, enhanced_name, new_name, year in enhanced_in_db:
                 # If enhanced_name is empty, generate it from new_name
                 if not enhanced_name:
                     enhanced_name = enhanced_name_for_report(new_name)
@@ -98,6 +143,18 @@ def sync_enhanced_status(engine, b2_filenames: Set[str]):
                 if not enhanced_name or enhanced_name not in b2_filenames:
                     ids_to_mark_not_enhanced.append(row_id_text)
                     logging.info(f"File '{enhanced_name or 'UNKNOWN'}' (ID: {row_id_text}) is 'enhanced' in DB but not in B2. Queueing to mark as N.")
+                    continue
+
+                qa_result = _check_layout_qa_from_b2(year, enhanced_name, b2_layout_qa_filenames)
+                if qa_result.present and not qa_result.ok:
+                    ids_to_mark_not_enhanced.append(row_id_text)
+                    logging.info(
+                        f"Layout QA failed for '{enhanced_name}' (ID: {row_id_text}): {qa_result.reason}. Queueing to mark as N."
+                    )
+                elif not qa_result.present:
+                    logging.info(
+                        f"Layout QA sidecar missing for existing enhanced record '{enhanced_name}' (ID: {row_id_text}); preserving historical enhanced=Y."
+                    )
 
             if ids_to_mark_not_enhanced:
                 # Using text() for table name to handle potential quoting needs
@@ -123,7 +180,7 @@ def sync_enhanced_status(engine, b2_filenames: Set[str]):
                 # First, we need to handle records with empty enhanced_name
                 # Get all records that need enhancement and have been downloaded
                 stmt_select_records_needing_enhancement = text(f"""
-                    SELECT id::text, new_name 
+                    SELECT id::text, new_name, year
                     FROM \"{SUPABASE_TABLE_NAME}\" 
                     WHERE (enhanced = 'N' OR enhanced IS NULL OR enhanced_name IS NULL OR enhanced_name = '') 
                     AND {DOWNLOADED_CONDITION} 
@@ -134,7 +191,7 @@ def sync_enhanced_status(engine, b2_filenames: Set[str]):
                 records_needing_enhancement = session.execute(stmt_select_records_needing_enhancement).fetchall()
                 logging.info(f"Found {len(records_needing_enhancement)} records needing enhancement")
                 ids_to_mark_enhanced: List[str] = []
-                for row_id_text, new_name in records_needing_enhancement:
+                for row_id_text, new_name, year in records_needing_enhancement:
                     # Skip records without a PDF name
                     if not new_name:
                         continue
@@ -143,6 +200,20 @@ def sync_enhanced_status(engine, b2_filenames: Set[str]):
                     logging.info(f"Expected enhanced_name: {expected_enhanced_name}")
                     # Check if this file exists in B2
                     if expected_enhanced_name in b2_filenames:
+                        expected_layout_qa_name = layout_qa_name_for_enhanced(expected_enhanced_name)
+                        if expected_layout_qa_name not in b2_layout_qa_filenames:
+                            logging.info(
+                                f"File '{expected_enhanced_name}' (ID: {row_id_text}) is in B2 but layout QA sidecar is missing in B2. Not marking enhanced."
+                            )
+                            continue
+
+                        qa_result = _check_layout_qa_from_b2(year, expected_enhanced_name, b2_layout_qa_filenames)
+                        if not qa_result.ok:
+                            logging.info(
+                                f"File '{expected_enhanced_name}' (ID: {row_id_text}) is in B2 but layout QA did not pass: {qa_result.reason}. Not marking enhanced."
+                            )
+                            continue
+
                         ids_to_mark_enhanced.append(row_id_text)
                         logging.info(f"File '{expected_enhanced_name}' (ID: {row_id_text}) is in B2 but not marked as 'enhanced' in DB. Queueing to mark as Y.")
                         
@@ -208,9 +279,10 @@ def main():
         return
 
     b2_report_files = get_b2_report_filenames(B2_REPORTS_PREFIX, ".png")
+    b2_layout_qa_files = get_b2_report_filenames(B2_REPORTS_PREFIX, ".layout_qa.json")
     
     # Proceed with sync even if b2_report_files is empty; sync_download_status handles this.
-    sync_enhanced_status(engine, b2_report_files)
+    sync_enhanced_status(engine, b2_report_files, b2_layout_qa_files)
     
     logging.info("Lassa Fever Report Enhanced Status Synchronizer finished.")
 
