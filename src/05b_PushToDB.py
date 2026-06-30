@@ -23,13 +23,17 @@ import time
 from sqlalchemy.exc import SQLAlchemyError, NoSuchTableError
 # Handle imports for both standalone execution and execution from main.py
 try:
-    from utils.artifact_paths import csv_name_for_report
+    from utils.artifact_paths import csv_name_for_report, extraction_qa_path_for_csv_path
+    from utils.csv_qa import validate_extracted_csv
     from utils.db_utils import push_data_with_upsert
     from utils.data_validation import add_uuid_column
+    from utils.status_qa import check_extraction_qa_file
 except ImportError:
-    from src.utils.artifact_paths import csv_name_for_report
+    from src.utils.artifact_paths import csv_name_for_report, extraction_qa_path_for_csv_path
+    from src.utils.csv_qa import validate_extracted_csv
     from src.utils.db_utils import push_data_with_upsert
     from src.utils.data_validation import add_uuid_column
+    from src.utils.status_qa import check_extraction_qa_file
 
 # Define base directory
 BASE_DIR = Path(__file__).parent.parent
@@ -59,6 +63,41 @@ def load_and_normalize_csv(csv_path):
     df.columns = df.columns.str.lower()
     return df
 
+
+def _expected_year(year):
+    return f"20{year}" if len(str(year)) == 2 else str(year)
+
+
+def _get_existing_lassa_report_ids(engine):
+    """Return report_ids that already have rows in lassa_data."""
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                SELECT DISTINCT report_id::text
+                FROM lassa_data
+                WHERE report_id IS NOT NULL
+            """))
+            return set(str(row[0]) for row in result if row[0] is not None)
+    except SQLAlchemyError:
+        return set()
+
+
+def csv_artifact_passes_qa(csv_path, year, week, logger):
+    csv_qa_result = validate_extracted_csv(csv_path, expected_year=_expected_year(year), expected_week=week)
+    if csv_qa_result.status != "pass":
+        logger.error(f"CSV QA failed for {csv_path.name}: {'; '.join(csv_qa_result.errors)}")
+        return False
+
+    extraction_qa_path = extraction_qa_path_for_csv_path(csv_path)
+    if extraction_qa_path and extraction_qa_path.exists():
+        extraction_qa_result = check_extraction_qa_file(extraction_qa_path)
+        if not extraction_qa_result.ok:
+            logger.error(f"Extraction QA failed for {csv_path.name}: {extraction_qa_result.reason}")
+            return False
+
+    return True
+
+
 def push_lassa_data_individually(engine):
     """
     Push individual Lassa data CSVs to the database with upsert strategy.
@@ -78,21 +117,32 @@ def push_lassa_data_individually(engine):
         logger.error(f"CSV directory {csv_dir} not found")
         return 0
         
-    # Create a map of filename to report_id from website_data
+    # Create a map of filename to report metadata from website_data
     report_map = {}
     with engine.connect() as conn:
         result = conn.execute(text("""
-            SELECT id, new_name, enhanced_name
+            SELECT id, new_name, enhanced_name, year, week, combined
             FROM website_data 
             WHERE processed = 'Y'
         """))
         for row in result:
-            report_id = row[0]
+            report_id = str(row[0])
             filename = row[1]
             enhanced_name = row[2]
+            year = row[3]
+            week = row[4]
+            combined = row[5] or 'N'
             csv_name = csv_name_for_report(filename, enhanced_name)
             if csv_name:
-                report_map[csv_name] = report_id
+                report_map[csv_name] = {
+                    "report_id": report_id,
+                    "year": year,
+                    "week": week,
+                    "combined": combined,
+                }
+
+    existing_lassa_report_ids = _get_existing_lassa_report_ids(engine)
+    logger.info(f"Found {len(existing_lassa_report_ids)} reports already in lassa_data")
     
     # Process each CSV file
     total_affected_rows = 0
@@ -103,7 +153,7 @@ def push_lassa_data_individually(engine):
         if year_dir.is_dir():
             csv_files.extend(year_dir.glob("*.csv"))
     
-    logger.info(f"Found {len(csv_files)} CSV files to process")
+    logger.info(f"Found {len(csv_files)} local CSV files")
     
     for csv_file in csv_files:
         csv_basename = csv_file.name
@@ -112,8 +162,18 @@ def push_lassa_data_individually(engine):
         if csv_basename not in report_map:
             logger.warning(f"No matching report found for {csv_basename}, skipping")
             continue
-            
-        report_id = report_map[csv_basename]
+
+        report_metadata = report_map[csv_basename]
+        report_id = report_metadata["report_id"]
+        combined = str(report_metadata["combined"]).upper()
+        if combined == 'Y' and report_id in existing_lassa_report_ids:
+            logger.debug(f"Skipping {csv_basename}; report {report_id} is already combined and present in lassa_data")
+            continue
+
+        if not csv_artifact_passes_qa(csv_file, report_metadata["year"], report_metadata["week"], logger):
+            logger.error(f"Skipping {csv_basename}; CSV/extraction QA did not pass")
+            continue
+
         logger.info(f"Processing {csv_basename} with report_id {report_id}")
         
         # Load and process the CSV

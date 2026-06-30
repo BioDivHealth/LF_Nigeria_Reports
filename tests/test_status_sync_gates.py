@@ -57,6 +57,34 @@ class FakeSession:
         return [params for sql, params in self.executed if marker in sql]
 
 
+class FakeConnection:
+    def __init__(self, responses):
+        self.responses = responses
+        self.executed = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def execute(self, stmt, params=None):
+        sql = str(stmt)
+        self.executed.append((sql, params))
+        for marker, rows in self.responses:
+            if marker in sql:
+                return FakeResult(rows)
+        return FakeResult([])
+
+
+class FakeEngine:
+    def __init__(self, responses):
+        self.responses = responses
+
+    def connect(self):
+        return FakeConnection(self.responses)
+
+
 def write_csv(path, confirmed="3"):
     path.parent.mkdir(parents=True, exist_ok=True)
     rows = [
@@ -214,6 +242,31 @@ class StatusSyncGateTests(unittest.TestCase):
 
         self.assertEqual([], result)
         update_mock.assert_not_called()
+
+    def test_05b_skips_already_combined_csv_when_db_rows_exist(self):
+        module = load_stage_module("05b_PushToDB.py", "push_to_db_skip_combined")
+        csv_name = "Lines_Nigeria_01_Jan_26_W1_page3.csv"
+        engine = FakeEngine(
+            [
+                (
+                    "FROM website_data",
+                    [("report-1", "Nigeria_01_Jan_26_W1.pdf", "Lines_Nigeria_01_Jan_26_W1_page3.png", "26", "1", "Y")],
+                ),
+                ("FROM lassa_data", [("report-1",)]),
+            ]
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            module.BASE_DIR = Path(temp_dir)
+            write_csv(Path(temp_dir) / "data" / "processed" / "CSV" / "CSV_LF_26_Sorted" / csv_name)
+
+            with patch.object(module, "load_and_normalize_csv") as load_mock, \
+                patch.object(module, "push_data_with_upsert") as push_mock:
+                affected_rows = module.push_lassa_data_individually(engine)
+
+        self.assertEqual(0, affected_rows)
+        load_mock.assert_not_called()
+        push_mock.assert_not_called()
 
 
 if __name__ == "__main__":
