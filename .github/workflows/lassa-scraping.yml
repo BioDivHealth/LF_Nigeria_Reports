@@ -69,7 +69,21 @@ jobs:
       run: |
         git config --global user.name 'GitHub Actions'
         git config --global user.email 'actions@github.com'
+
+        # Do not publish exports from a stale checkout if main moved while this
+        # long-running pipeline was executing.
+        git fetch origin main
+        if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
+          echo "::warning::main changed during this run; skipping export commit to avoid publishing stale outputs."
+          exit 0
+        fi
+
         # Only add the latest data file and README, not the timestamped versions
         git add exports/lassa_data_latest.csv exports/README.md
-        git commit -m "Update exported Lassa fever data [skip ci]" || echo "No changes to commit"
+        if git diff --cached --quiet; then
+          echo "No export changes to commit"
+          exit 0
+        fi
+
+        git commit -m "Update exported Lassa fever data [skip ci]"
         git push https://${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git
