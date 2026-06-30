@@ -147,6 +147,34 @@ def _check_processed_artifact(year, week, csv_name, b2_filenames, b2_extraction_
     return QAStatusResult(ok=True, reason=f"Processed artifact QA passed for {csv_name}")
 
 
+def _check_existing_processed_artifact(year, week, csv_name, b2_extraction_qa_filenames):
+    """Check available QA evidence for an existing processed=Y record without bulk-downloading old CSVs."""
+    local_csv_path = csv_path(CSV_BASE_FOLDER, year, csv_name)
+    saw_qa_evidence = False
+
+    if local_csv_path and local_csv_path.exists():
+        saw_qa_evidence = True
+        csv_qa_result = validate_extracted_csv(local_csv_path, expected_year=_expected_year(year), expected_week=week)
+        if csv_qa_result.status != "pass":
+            return QAStatusResult(ok=False, reason=f"CSV QA failed for {csv_name}: {'; '.join(csv_qa_result.errors)}", present=True)
+
+    extraction_qa_path = _download_extraction_qa_if_available(year, csv_name, b2_extraction_qa_filenames)
+    extraction_qa_result = check_extraction_qa_file(extraction_qa_path)
+    if extraction_qa_result.present:
+        saw_qa_evidence = True
+        if not extraction_qa_result.ok:
+            return extraction_qa_result
+
+    if not saw_qa_evidence:
+        return QAStatusResult(
+            ok=False,
+            reason=f"No local CSV or extraction QA sidecar available for historical processed record: {csv_name}",
+            present=False,
+        )
+
+    return QAStatusResult(ok=True, reason=f"Available processed QA passed for {csv_name}")
+
+
 def sync_processed_status(engine, b2_filenames: Set[str], b2_extraction_qa_filenames: Optional[Set[str]] = None):
     """
     Synchronizes the 'processed' status in the Supabase 'website_data' table
@@ -188,9 +216,7 @@ def sync_processed_status(engine, b2_filenames: Set[str], b2_extraction_qa_filen
                     logging.info(f"File '{expected_csv_name}' (ID: {row_id_text}) is marked as 'processed' in DB but not found in B2. Queueing to mark as N.")
                     continue
 
-                qa_result = _check_processed_artifact(
-                    year, week, expected_csv_name, b2_filenames, b2_extraction_qa_filenames
-                )
+                qa_result = _check_existing_processed_artifact(year, week, expected_csv_name, b2_extraction_qa_filenames)
                 if qa_result.present and not qa_result.ok:
                     ids_to_mark_not_processed.append(row_id_text)
                     logging.info(

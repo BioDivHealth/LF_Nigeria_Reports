@@ -126,6 +126,26 @@ class StatusSyncGateTests(unittest.TestCase):
 
         self.assertEqual([], session.params_for_sql_containing("SET processed = 'Y'"))
 
+    def test_04a_does_not_download_historical_processed_csv_for_demote_check(self):
+        module = load_stage_module("04a_SyncProcessed.py", "sync_processed_existing_no_bulk_download")
+        csv_name = "Lines_Nigeria_01_Jan_26_W1_page3.csv"
+        session = FakeSession(
+            [
+                ("WHERE processed = 'Y'", [("report-1", "Nigeria_01_Jan_26_W1.pdf", "Lines_Nigeria_01_Jan_26_W1_page3.png", "26", "1")]),
+                ("WHERE (processed IS NULL", []),
+            ]
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            module.CSV_BASE_FOLDER = Path(temp_dir)
+            with patch.object(module, "Session", lambda engine: session), \
+                patch.object(module, "download_file") as download_mock:
+                module.sync_processed_status(object(), {csv_name}, set())
+
+        download_mock.assert_not_called()
+        self.assertEqual([], session.params_for_sql_containing("SET processed = 'N'"))
+        self.assertEqual([], session.params_for_sql_containing("SET processed = 'Y'"))
+
     def test_04a_marks_processed_after_csv_and_extraction_qa_pass(self):
         module = load_stage_module("04a_SyncProcessed.py", "sync_processed_qa_gate")
         csv_name = "Lines_Nigeria_01_Jan_26_W1_page3.csv"
