@@ -33,10 +33,12 @@ from sqlalchemy.orm import Session
 
 # Attempt to import utility functions, supporting both direct and main.py execution
 try:
+    from utils.artifact_paths import csv_name_for_report
     from utils.db_utils import get_db_engine, get_existing_records
     from utils.logging_config import configure_logging
     from utils.cloud_storage import get_b2_report_filenames, download_file
 except ImportError:
+    from src.utils.artifact_paths import csv_name_for_report
     from src.utils.db_utils import get_db_engine, get_existing_records
     from src.utils.logging_config import configure_logging
     from src.utils.cloud_storage import get_b2_report_filenames, download_file
@@ -65,20 +67,6 @@ DOWNLOADED_CONDITION = "downloaded = 'Y'"
 PROCESSED_CONDITION = "processed = 'Y'"
 
 # --- Functions -----------------------------
-
-def generate_csv_name(pdf_name: Optional[str]) -> Optional[str]:
-    """
-    Generate CSV filename from PDF filename.
-    
-    Args:
-        pdf_name: The PDF filename (can be None)
-        
-    Returns:
-        The CSV filename or None if pdf_name is None/empty
-    """
-    if not pdf_name:
-        return None
-    return f"Lines_{pdf_name.replace('.pdf', '')}_page3.csv"
 
 def find_local_csv_files() -> Dict[str, Path]:
     """
@@ -118,7 +106,7 @@ def get_report_mapping(engine) -> Dict[str, Tuple[str, str, str, str]]:
     with Session(engine) as session:
         # Query for reports that have been processed
         query = text(f"""
-            SELECT id::text, new_name, year, week, combined
+            SELECT id::text, new_name, enhanced_name, year, week, combined
             FROM "{SUPABASE_TABLE_NAME}" 
             WHERE {PROCESSED_CONDITION}
             AND {COMMON_YEAR_CONDITION}
@@ -130,12 +118,13 @@ def get_report_mapping(engine) -> Dict[str, Tuple[str, str, str, str]]:
         for row in result:
             report_id = row[0]
             pdf_name = row[1]
-            year = row[2]
-            week = row[3]
-            combined = row[4] or 'N'  # Default to 'N' if NULL
+            enhanced_name = row[2]
+            year = row[3]
+            week = row[4]
+            combined = row[5] or 'N'  # Default to 'N' if NULL
             
-            if pdf_name:
-                csv_name = generate_csv_name(pdf_name)
+            csv_name = csv_name_for_report(pdf_name, enhanced_name)
+            if csv_name:
                 report_map[csv_name] = (report_id, year, week, combined)
     
     logging.info(f"Retrieved {len(report_map)} report mappings from database")

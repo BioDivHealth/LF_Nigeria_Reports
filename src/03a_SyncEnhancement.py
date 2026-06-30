@@ -37,11 +37,13 @@ from sqlalchemy.orm import Session
 
 # Attempt to import utility functions, supporting both direct and main.py execution
 try:
+    from utils.artifact_paths import enhanced_name_for_report
     from utils.db_utils import get_db_engine
     from utils.logging_config import configure_logging
     from utils.cloud_storage import get_b2_report_filenames 
 except ImportError:
     # This fallback is for when the script is run from the project root as part of main.py
+    from src.utils.artifact_paths import enhanced_name_for_report
     from src.utils.db_utils import get_db_engine
     from src.utils.logging_config import configure_logging
     from src.utils.cloud_storage import get_b2_report_filenames
@@ -68,20 +70,6 @@ COMPATIBILITY_CONDITION = "(compatible IS NULL OR compatible = 'Y' OR compatible
 DOWNLOADED_CONDITION = "downloaded = 'Y'"
 # --- Functions -----------------------------
 
-def generate_enhanced_name(pdf_name: Optional[str]) -> Optional[str]:
-    """
-    Generate enhanced image filename from PDF filename.
-    
-    Args:
-        pdf_name: The PDF filename (can be None)
-        
-    Returns:
-        The enhanced image filename or None if pdf_name is None/empty
-    """
-    if not pdf_name:
-        return None
-    return f"Lines_{pdf_name.replace('.pdf', '')}_page3.png"
-
 def sync_enhanced_status(engine, b2_filenames: Set[str]):
     """
     Synchronizes the 'enhanced' status in the Supabase 'website_data' table
@@ -103,8 +91,8 @@ def sync_enhanced_status(engine, b2_filenames: Set[str]):
             ids_to_mark_not_enhanced: List[str] = []
             for row_id_text, enhanced_name, new_name in enhanced_in_db:
                 # If enhanced_name is empty, generate it from new_name
-                if not enhanced_name and new_name:
-                    enhanced_name = generate_enhanced_name(new_name)
+                if not enhanced_name:
+                    enhanced_name = enhanced_name_for_report(new_name)
                     logging.info(f"Generated enhanced_name '{enhanced_name}' for ID: {row_id_text} based on new_name '{new_name}'")
                 
                 if not enhanced_name or enhanced_name not in b2_filenames:
@@ -151,7 +139,7 @@ def sync_enhanced_status(engine, b2_filenames: Set[str]):
                     if not new_name:
                         continue
                     # Generate the expected enhanced_name
-                    expected_enhanced_name = generate_enhanced_name(new_name)
+                    expected_enhanced_name = enhanced_name_for_report(new_name)
                     logging.info(f"Expected enhanced_name: {expected_enhanced_name}")
                     # Check if this file exists in B2
                     if expected_enhanced_name in b2_filenames:

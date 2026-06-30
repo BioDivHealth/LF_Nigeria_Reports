@@ -34,6 +34,11 @@ from typing import List, Dict, Optional
 
 # Attempt to import utility functions, supporting both direct and main.py execution
 try:
+    from utils.artifact_paths import (
+        enhanced_image_path,
+        enhanced_name_for_report,
+        layout_qa_path_for_enhanced_path,
+    )
     from utils.cloud_storage import get_b2_file_list
     from utils.cloud_storage import download_file
     from utils.cloud_storage import upload_file
@@ -46,6 +51,11 @@ try:
     # Import the sync_enhanced_status function from 03a_SyncEnhancement.py
     spec = importlib.util.spec_from_file_location("sync_module", "src/03a_SyncEnhancement.py")
 except ImportError:
+    from src.utils.artifact_paths import (
+        enhanced_image_path,
+        enhanced_name_for_report,
+        layout_qa_path_for_enhanced_path,
+    )
     from src.utils.cloud_storage import get_b2_file_list
     from src.utils.cloud_storage import download_file
     from src.utils.cloud_storage import upload_file
@@ -62,6 +72,11 @@ except ImportError:
     sync_enhanced_status = sync_module.sync_enhanced_status
 except ImportError:
     # This fallback is for when the script is run from the project root as part of main.py
+    from src.utils.artifact_paths import (
+        enhanced_image_path,
+        enhanced_name_for_report,
+        layout_qa_path_for_enhanced_path,
+    )
     from src.utils.cloud_storage import get_b2_file_list
     from src.utils.cloud_storage import download_file
     from src.utils.cloud_storage import upload_file
@@ -124,7 +139,7 @@ def enhance_report_pdf(pdf_path: Path, output_path: Path, year, week) -> bool:
         year=year,
         week=week,
     )
-    layout_qa_path = output_path.with_suffix(".layout_qa.json")
+    layout_qa_path = layout_qa_path_for_enhanced_path(output_path)
     write_layout_qa(layout_qa_path, layout_result)
 
     logging.info(
@@ -271,9 +286,11 @@ def process_reports_from_supabase():
             new_name = report['new_name']
             year = report['year']
             week = report['week']
-            # Generate enhanced image name
-            enhanced_name = f"Lines_{new_name.replace('.pdf', '')}_page3.png"
-            output_path = ENHANCED_FOLDER / f"PDFs_Lines_{year}" / enhanced_name
+            enhanced_name = enhanced_name_for_report(new_name)
+            output_path = enhanced_image_path(ENHANCED_FOLDER, year, enhanced_name)
+            if not output_path:
+                logging.warning(f"Could not derive enhanced artifact path for report {report_id} ({new_name})")
+                continue
             output_path.parent.mkdir(parents=True, exist_ok=True)
             if output_path.exists():
                 logging.info(f"Enhanced image {enhanced_name} already exists in {output_path}")

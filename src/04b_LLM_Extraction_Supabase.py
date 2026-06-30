@@ -39,12 +39,18 @@ configure_logging()
 # Import utility modules
 try:
     # Try direct import first (when run as a standalone script)
+    from utils.artifact_paths import (
+        csv_name_for_enhanced,
+        csv_path,
+        enhanced_image_path,
+        extraction_qa_path_for_csv_path,
+        layout_qa_path_for_enhanced_path,
+    )
     from utils.gemini_extractor import (
         extract_table_with_gemini, parse_gemini_response,
         log_extraction_differences, save_extracted_data_to_csv)
     from utils.csv_qa import validate_extracted_csv
     from utils.extraction_qa import (
-        default_layout_qa_path_for_enhanced_image,
         read_extracted_csv_rows,
         write_extraction_qa,
     )
@@ -53,12 +59,18 @@ try:
     from utils.db_utils import get_db_engine
 except ImportError:
     # Fall back to relative import (when run from main.py)
+    from src.utils.artifact_paths import (
+        csv_name_for_enhanced,
+        csv_path,
+        enhanced_image_path,
+        extraction_qa_path_for_csv_path,
+        layout_qa_path_for_enhanced_path,
+    )
     from src.utils.gemini_extractor import (
         extract_table_with_gemini, parse_gemini_response,
         log_extraction_differences, save_extracted_data_to_csv)
     from src.utils.csv_qa import validate_extracted_csv
     from src.utils.extraction_qa import (
-        default_layout_qa_path_for_enhanced_image,
         read_extracted_csv_rows,
         write_extraction_qa,
     )
@@ -152,8 +164,10 @@ def get_enhanced_image(enhanced_name, year):
         return None
         
     # Check if image exists locally first
-    year_folder = ENHANCED_FOLDER / f"PDFs_Lines_{year}"
-    local_path = year_folder / enhanced_name
+    local_path = enhanced_image_path(ENHANCED_FOLDER, year, enhanced_name)
+    if not local_path:
+        logging.warning(f"Could not derive enhanced image path for {enhanced_name}")
+        return None
     
     if local_path.exists():
         logging.info(f"Found enhanced image locally: {local_path}")
@@ -234,14 +248,19 @@ def process_single_report(report_metadata, model_name, engine):
         logging.warning(f"No enhanced image name for Year {year}, Week {week}")
         return False
     
+    csv_name = csv_name_for_enhanced(enhanced_name)
+    output_path = csv_path(CSV_BASE_FOLDER, year, csv_name)
+    if not output_path:
+        logging.warning(f"Could not derive CSV path for enhanced image {enhanced_name}")
+        return False
+
     # Output folder for CSV files
-    output_dir = CSV_BASE_FOLDER / f"CSV_LF_{year}_Sorted"
+    output_dir = output_path.parent
     output_dir.mkdir(parents=True, exist_ok=True)
     
     # Output CSV filename
-    base_filename = os.path.splitext(enhanced_name)[0]
-    output_path = output_dir / f"{base_filename}.csv"
-    extraction_qa_path = output_dir / f"{base_filename}.extraction_qa.json"
+    base_filename = Path(csv_name).stem
+    extraction_qa_path = extraction_qa_path_for_csv_path(output_path)
     
     # Check if output file already exists
     if output_path.exists():
@@ -343,7 +362,7 @@ def process_single_report(report_metadata, model_name, engine):
                             logging.error(f"CSV QA failed for {base_filename}.csv: {error}")
                         return False
 
-                    layout_qa_path = default_layout_qa_path_for_enhanced_image(input_path)
+                    layout_qa_path = layout_qa_path_for_enhanced_path(input_path)
                     write_extraction_qa(
                         extraction_qa_path,
                         enhanced_name=enhanced_name,

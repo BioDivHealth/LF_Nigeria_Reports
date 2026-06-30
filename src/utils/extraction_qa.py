@@ -11,6 +11,11 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+try:
+    from utils.artifact_paths import layout_qa_path_for_enhanced_path
+except ImportError:
+    from src.utils.artifact_paths import layout_qa_path_for_enhanced_path
+
 
 def _blank(value):
     return value is None or str(value).strip() == ""
@@ -87,9 +92,7 @@ def read_extracted_csv_rows(csv_path):
 
 
 def default_layout_qa_path_for_enhanced_image(enhanced_image_path):
-    if not enhanced_image_path:
-        return None
-    return Path(enhanced_image_path).with_suffix(".layout_qa.json")
+    return layout_qa_path_for_enhanced_path(enhanced_image_path)
 
 
 def write_extraction_qa(

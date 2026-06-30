@@ -37,11 +37,13 @@ from sqlalchemy.orm import Session
 
 # Attempt to import utility functions, supporting both direct and main.py execution
 try:
+    from utils.artifact_paths import csv_name_for_report
     from utils.db_utils import get_db_engine
     from utils.logging_config import configure_logging
     from utils.cloud_storage import get_b2_report_filenames 
 except ImportError:
     # This fallback is for when the script is run from the project root as part of main.py
+    from src.utils.artifact_paths import csv_name_for_report
     from src.utils.db_utils import get_db_engine
     from src.utils.logging_config import configure_logging
     from src.utils.cloud_storage import get_b2_report_filenames
@@ -67,20 +69,6 @@ COMMON_YEAR_CONDITION = "(year >= 20 OR year >= '20')"
 COMPATIBILITY_CONDITION = "(compatible IS NULL OR compatible = 'Y' OR compatible != 'N')"
 DOWNLOADED_CONDITION = "downloaded = 'Y'"
 # --- Functions -----------------------------
-
-def generate_csv_name(pdf_name: Optional[str]) -> Optional[str]:
-    """
-    Generate CSV filename from PDF filename.
-    
-    Args:
-        pdf_name: The PDF filename (can be None)
-        
-    Returns:
-        The CSV filename or None if pdf_name is None/empty
-    """
-    if not pdf_name:
-        return None
-    return f"Lines_{pdf_name.replace('.pdf', '')}_page3.csv"
 
 def sync_processed_status(engine, b2_filenames: Set[str]):
     """
@@ -112,11 +100,9 @@ def sync_processed_status(engine, b2_filenames: Set[str]):
             
             ids_to_mark_not_processed: List[str] = []
             for row_id_text, pdf_name, enhanced_name in records_marked_processed:
-                # Skip records without an enhanced_name
-                if not enhanced_name:
+                expected_csv_name = csv_name_for_report(pdf_name, enhanced_name)
+                if not expected_csv_name:
                     continue
-                # Generate the expected CSV name
-                expected_csv_name = generate_csv_name(pdf_name)
                 # Check if this file exists in B2
                 if expected_csv_name not in b2_filenames:
                     ids_to_mark_not_processed.append(row_id_text)
@@ -149,11 +135,9 @@ def sync_processed_status(engine, b2_filenames: Set[str]):
             logging.info(f"Found {len(records_needing_processing)} records needing processing status update")
             ids_to_mark_processed: List[str] = []
             for row_id_text, pdf_name, enhanced_name in records_needing_processing:
-                # Skip records without a PDF name
-                if not pdf_name or not enhanced_name:
+                expected_csv_name = csv_name_for_report(pdf_name, enhanced_name)
+                if not expected_csv_name:
                     continue
-                # Generate the expected CSV name
-                expected_csv_name = generate_csv_name(pdf_name)
                 logging.info(f"Expected CSV name: {expected_csv_name}")
                 # Check if this file exists in B2
                 if expected_csv_name in b2_filenames:

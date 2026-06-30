@@ -23,9 +23,11 @@ import time
 from sqlalchemy.exc import SQLAlchemyError, NoSuchTableError
 # Handle imports for both standalone execution and execution from main.py
 try:
+    from utils.artifact_paths import csv_name_for_report
     from utils.db_utils import push_data_with_upsert
     from utils.data_validation import add_uuid_column
 except ImportError:
+    from src.utils.artifact_paths import csv_name_for_report
     from src.utils.db_utils import push_data_with_upsert
     from src.utils.data_validation import add_uuid_column
 
@@ -80,16 +82,16 @@ def push_lassa_data_individually(engine):
     report_map = {}
     with engine.connect() as conn:
         result = conn.execute(text("""
-            SELECT id, new_name 
+            SELECT id, new_name, enhanced_name
             FROM website_data 
             WHERE processed = 'Y'
         """))
         for row in result:
             report_id = row[0]
             filename = row[1]
-            if filename:
-                # Generate the expected CSV name pattern
-                csv_name = f"Lines_{filename.replace('.pdf', '')}_page3.csv"
+            enhanced_name = row[2]
+            csv_name = csv_name_for_report(filename, enhanced_name)
+            if csv_name:
                 report_map[csv_name] = report_id
     
     # Process each CSV file
