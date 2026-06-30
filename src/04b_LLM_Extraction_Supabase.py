@@ -177,7 +177,7 @@ def get_enhanced_image(enhanced_name, year):
     logging.info(f"Enhanced image not found locally, attempting to download from B2: {enhanced_name}")
         
     # Create directory if it doesn't exist
-    year_folder.mkdir(parents=True, exist_ok=True)
+    local_path.parent.mkdir(parents=True, exist_ok=True)
     
     # B2 key for enhanced image
     b2_key = f"{B2_ENHANCED_PREFIX}PDFs_Lines_{year}/{enhanced_name}"

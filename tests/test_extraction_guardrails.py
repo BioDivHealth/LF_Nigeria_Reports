@@ -75,6 +75,24 @@ class ExtractionGuardrailTests(unittest.TestCase):
 
         self.assertEqual(rows, filtered)
 
+    def test_get_enhanced_image_downloads_to_derived_year_folder(self):
+        module = load_llm_extraction_module()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            module.ENHANCED_FOLDER = Path(temp_dir) / "PDF"
+            enhanced_name = "Lines_Nigeria_24_Jan_26_W4_page3.png"
+            expected_path = module.ENHANCED_FOLDER / "PDFs_Lines_26" / enhanced_name
+
+            with patch.object(module, "download_file", return_value=True) as download_mock:
+                result = module.get_enhanced_image(enhanced_name, "26")
+
+            self.assertEqual(expected_path, result)
+            self.assertTrue(expected_path.parent.exists())
+            download_mock.assert_called_once_with(
+                f"{module.B2_ENHANCED_PREFIX}PDFs_Lines_26/{enhanced_name}",
+                str(expected_path),
+            )
+
     def test_validate_extraction_results_passes_matching_valid_outputs(self):
         from src.utils.extraction_validation import validate_extraction_results
 
