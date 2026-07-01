@@ -66,6 +66,7 @@ jobs:
           data/processed/**/*.layout_qa.json
           data/processed/**/*.extraction_qa.json
           data/processed/**/differing_outputs.txt
+          data/processed/review_needed.jsonl
         if-no-files-found: ignore
         retention-days: 90
       
