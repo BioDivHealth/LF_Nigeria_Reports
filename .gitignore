@@ -1,6 +1,8 @@
 .env
 .gitignore
 data/
+logs/
+plan/
 venv/
 notebooks/
 src/prompts/__pycache__/
@@ -32,3 +34,12 @@ lassa_sitreps.html
 .gitignore
 web_app/combined_lassa_data_2021-2025.csv
 exports/lassa_data_20250602.csv
+
+docs/codex_chats/
+
+# Local Codex/dev artifacts
+AGENTS.md
+report_layout/
+scripts/dev/
+__pycache__/
+tests/__pycache__/

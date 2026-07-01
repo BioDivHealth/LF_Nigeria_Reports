@@ -28,6 +28,8 @@ import time
 import logging
 import importlib.util
 import os
+import csv
+from dataclasses import dataclass
 from pathlib import Path
 
 # Add the project root directory to Python path to fix import issues
@@ -84,6 +86,182 @@ def import_module_from_file(module_name, file_path):
     spec.loader.exec_module(module)
     return module
 
+
+@dataclass
+class PipelineStepSummary:
+    step_number: int
+    total_steps: int
+    name: str
+    status: str
+    duration_seconds: float
+    note: str = ""
+
+
+def _format_duration(seconds):
+    return f"{seconds:.2f}s"
+
+
+def _short_note(value, max_length=120):
+    note = str(value or "").replace("\n", " ").strip()
+    if len(note) <= max_length:
+        return note
+    return f"{note[:max_length - 3]}..."
+
+
+def count_csv_data_rows(csv_path):
+    csv_path = Path(csv_path)
+    if not csv_path.exists():
+        return None
+
+    with csv_path.open(newline="", encoding="utf-8") as infile:
+        reader = csv.reader(infile)
+        try:
+            next(reader)
+        except StopIteration:
+            return 0
+        return sum(1 for _ in reader)
+
+
+def collect_qa_artifact_counts(base_dir):
+    processed_dir = Path(base_dir) / "data" / "processed"
+    counts = {
+        "layout_qa": 0,
+        "extraction_qa": 0,
+        "differing_outputs": 0,
+    }
+    if not processed_dir.exists():
+        return counts
+
+    counts["layout_qa"] = sum(1 for _ in processed_dir.rglob("*.layout_qa.json"))
+    counts["extraction_qa"] = sum(1 for _ in processed_dir.rglob("*.extraction_qa.json"))
+    counts["differing_outputs"] = sum(1 for _ in processed_dir.rglob("differing_outputs.txt"))
+    return counts
+
+
+def _summary_metrics(pipeline_success, completed_steps, total_steps, total_runtime_seconds, base_dir):
+    export_rows = count_csv_data_rows(Path(base_dir) / "exports" / "lassa_data_latest.csv")
+    qa_counts = collect_qa_artifact_counts(base_dir)
+    return {
+        "overall_status": "success" if pipeline_success else "completed with errors",
+        "completed_steps": completed_steps,
+        "total_steps": total_steps,
+        "total_runtime": _format_duration(total_runtime_seconds),
+        "export_rows": export_rows,
+        "qa_counts": qa_counts,
+    }
+
+
+def format_pipeline_summary_text(step_summaries, pipeline_success, completed_steps, total_steps, total_runtime_seconds, base_dir):
+    metrics = _summary_metrics(pipeline_success, completed_steps, total_steps, total_runtime_seconds, base_dir)
+    export_rows = metrics["export_rows"] if metrics["export_rows"] is not None else "unavailable"
+    qa_counts = metrics["qa_counts"]
+    lines = [
+        "Pipeline run summary",
+        f"Overall status: {metrics['overall_status']}",
+        f"Steps completed: {completed_steps}/{total_steps}",
+        f"Total runtime: {metrics['total_runtime']}",
+        f"Latest export rows: {export_rows}",
+        (
+            "QA artifacts: "
+            f"layout_qa={qa_counts['layout_qa']}, "
+            f"extraction_qa={qa_counts['extraction_qa']}, "
+            f"differing_outputs={qa_counts['differing_outputs']}"
+        ),
+        "Step timings:",
+    ]
+
+    for step in step_summaries:
+        note_suffix = f" - {step.note}" if step.note else ""
+        lines.append(
+            f"  {step.step_number}/{step.total_steps} {step.name}: "
+            f"{step.status} in {_format_duration(step.duration_seconds)}{note_suffix}"
+        )
+
+    return "\n".join(lines)
+
+
+def _markdown_cell(value):
+    return str(value).replace("|", "\\|").replace("\n", " ").strip()
+
+
+def format_pipeline_summary_markdown(step_summaries, pipeline_success, completed_steps, total_steps, total_runtime_seconds, base_dir):
+    metrics = _summary_metrics(pipeline_success, completed_steps, total_steps, total_runtime_seconds, base_dir)
+    export_rows = metrics["export_rows"] if metrics["export_rows"] is not None else "unavailable"
+    qa_counts = metrics["qa_counts"]
+    qa_summary = (
+        f"layout_qa={qa_counts['layout_qa']}, "
+        f"extraction_qa={qa_counts['extraction_qa']}, "
+        f"differing_outputs={qa_counts['differing_outputs']}"
+    )
+
+    lines = [
+        "## Lassa Pipeline Run Summary",
+        "",
+        "| Metric | Value |",
+        "| --- | --- |",
+        f"| Overall status | {_markdown_cell(metrics['overall_status'])} |",
+        f"| Steps completed | {completed_steps}/{total_steps} |",
+        f"| Total runtime | {metrics['total_runtime']} |",
+        f"| Latest export rows | {export_rows} |",
+        f"| QA artifacts | {_markdown_cell(qa_summary)} |",
+        "",
+        "| Step | Status | Duration | Note |",
+        "| --- | --- | --- | --- |",
+    ]
+
+    for step in step_summaries:
+        lines.append(
+            "| "
+            f"{step.step_number}/{step.total_steps} {_markdown_cell(step.name)} | "
+            f"{_markdown_cell(step.status)} | "
+            f"{_format_duration(step.duration_seconds)} | "
+            f"{_markdown_cell(step.note)} |"
+        )
+
+    return "\n".join(lines)
+
+
+def write_github_step_summary(markdown, env=None):
+    env = env if env is not None else os.environ
+    summary_path = env.get("GITHUB_STEP_SUMMARY")
+    if not summary_path:
+        return False
+
+    try:
+        with open(summary_path, "a", encoding="utf-8") as outfile:
+            outfile.write(markdown.rstrip())
+            outfile.write("\n")
+        return True
+    except OSError as exc:
+        logging.warning(f"Could not write GitHub step summary: {exc}")
+        return False
+
+
+def emit_pipeline_summary(step_summaries, pipeline_success, completed_steps, total_steps, total_runtime_seconds, base_dir):
+    try:
+        text_summary = format_pipeline_summary_text(
+            step_summaries,
+            pipeline_success,
+            completed_steps,
+            total_steps,
+            total_runtime_seconds,
+            base_dir,
+        )
+        for line in text_summary.splitlines():
+            logging.info(line)
+
+        markdown_summary = format_pipeline_summary_markdown(
+            step_summaries,
+            pipeline_success,
+            completed_steps,
+            total_steps,
+            total_runtime_seconds,
+            base_dir,
+        )
+        write_github_step_summary(markdown_summary)
+    except Exception as exc:
+        logging.warning(f"Could not emit pipeline run summary: {exc}", exc_info=True)
+
 def run_pipeline():
     """
     Run the complete Lassa Fever report processing pipeline.
@@ -111,6 +289,9 @@ def run_pipeline():
     # Track overall success of the pipeline
     pipeline_success = True
     completed_steps = 0
+    step_summaries = []
+    pipeline_start_time = time.time()
+    total_steps = len(scripts)
     
     # Execute each script in sequence
     for i, script in enumerate(scripts):
@@ -120,9 +301,12 @@ def run_pipeline():
         if not script_path.exists():
             logging.error(f"Script not found: {script_path}")
             pipeline_success = False
+            step_summaries.append(
+                PipelineStepSummary(i + 1, total_steps, script_name, "failed", 0.0, "script not found")
+            )
             continue
         
-        logging.info(f"Starting step {i+1}/{len(scripts)}: {script_name}")
+        logging.info(f"Starting step {i+1}/{total_steps}: {script_name}")
         start_time = time.time()
         
         try:
@@ -139,6 +323,16 @@ def run_pipeline():
                     if e.code == 1:
                         logging.warning(f"{script_name} exited with code 1. This may be due to missing environment variables. Continuing with next step.")
                         pipeline_success = False
+                        step_summaries.append(
+                            PipelineStepSummary(
+                                i + 1,
+                                total_steps,
+                                script_name,
+                                "failed",
+                                time.time() - start_time,
+                                "exited with code 1",
+                            )
+                        )
                         continue
                     else:
                         # For other exit codes, re-raise the exception
@@ -159,21 +353,54 @@ def run_pipeline():
                     if e.code == 1:
                         logging.warning(f"process_file_status_update for {script_name} exited with code 1. Continuing with next step.")
                         pipeline_success = False
+                        step_summaries.append(
+                            PipelineStepSummary(
+                                i + 1,
+                                total_steps,
+                                script_name,
+                                "failed",
+                                time.time() - start_time,
+                                "process_file_status_update exited with code 1",
+                            )
+                        )
                         continue
                     else:
                         raise
                 except Exception as e:
                     logging.error(f"Error in process_file_status_update for {script_name}: {e}")
                     pipeline_success = False
+                    step_summaries.append(
+                        PipelineStepSummary(
+                            i + 1,
+                            total_steps,
+                            script_name,
+                            "failed",
+                            time.time() - start_time,
+                            _short_note(f"process_file_status_update error: {e}"),
+                        )
+                    )
                     continue
             
             elapsed_time = time.time() - start_time
             logging.info(f"Completed {script_name} in {elapsed_time:.2f} seconds")
             completed_steps += 1
+            step_summaries.append(
+                PipelineStepSummary(i + 1, total_steps, script_name, "success", elapsed_time)
+            )
             
         except Exception as e:
             logging.error(f"Error executing {script_name}: {e}", exc_info=True)
             pipeline_success = False
+            step_summaries.append(
+                PipelineStepSummary(
+                    i + 1,
+                    total_steps,
+                    script_name,
+                    "failed",
+                    time.time() - start_time,
+                    _short_note(e),
+                )
+            )
             # Continue with the next script instead of exiting
             continue
     
@@ -181,6 +408,15 @@ def run_pipeline():
         logging.info("Pipeline completed successfully!")
     else:
         logging.warning(f"Pipeline completed with errors. {completed_steps}/{len(scripts)} steps completed successfully.")
+
+    emit_pipeline_summary(
+        step_summaries,
+        pipeline_success,
+        completed_steps,
+        total_steps,
+        time.time() - pipeline_start_time,
+        base_dir,
+    )
     
     return pipeline_success
 
