@@ -20,4 +20,4 @@ Each CSV file contains the following columns:
 - `hcw`: Number of healthcare worker cases
 - `deaths`: Number of deaths
 
-Last updated: 2026-07-01 11:27:17
+Last updated: 2026-07-01 13:42:46
