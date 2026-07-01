@@ -39,6 +39,8 @@ class PipelineSummaryTests(unittest.TestCase):
 
         self.assertIn("Overall status: completed with errors", text)
         self.assertIn("Steps completed: 1/2", text)
+        self.assertIn("Review needed: 0", text)
+        self.assertIn("| Review needed | 0 |", markdown)
         self.assertIn("1/2 URL_Sourcing: success in 1.23s", text)
         self.assertIn("2/2 ExportData: failed in 0.50s - boom | pipe", text)
         self.assertIn("| 2/2 ExportData | failed | 0.50s | boom \\| pipe |", markdown)
@@ -59,6 +61,11 @@ class PipelineSummaryTests(unittest.TestCase):
             (processed_dir / "sample.layout_qa.json").write_text("{}", encoding="utf-8")
             (processed_dir / "sample.extraction_qa.json").write_text("{}", encoding="utf-8")
             (processed_dir / "differing_outputs.txt").write_text("x", encoding="utf-8")
+            (base_dir / "data" / "processed" / "review_needed.jsonl").write_text(
+                '{"stage":"SyncProcessed","check_type":"csv_qa"}\n'
+                '{"stage":"CombinedStatus","check_type":"extraction_qa"}\n',
+                encoding="utf-8",
+            )
 
             self.assertEqual(2, count_csv_data_rows(exports_dir / "lassa_data_latest.csv"))
             self.assertEqual(
@@ -76,6 +83,7 @@ class PipelineSummaryTests(unittest.TestCase):
 
         self.assertIn("Latest export rows: 2", text)
         self.assertIn("layout_qa=1, extraction_qa=1, differing_outputs=1", text)
+        self.assertIn("Review needed: 2", text)
 
     def test_writes_markdown_to_fake_github_summary_path(self):
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -42,6 +42,7 @@ try:
     from utils.db_utils import get_db_engine, get_existing_records
     from utils.logging_config import configure_logging
     from utils.cloud_storage import get_b2_report_filenames, download_file
+    from utils.review_needed import record_review_needed
     from utils.status_qa import check_extraction_qa_file
 except ImportError:
     from src.utils.artifact_paths import (
@@ -53,6 +54,7 @@ except ImportError:
     from src.utils.db_utils import get_db_engine, get_existing_records
     from src.utils.logging_config import configure_logging
     from src.utils.cloud_storage import get_b2_report_filenames, download_file
+    from src.utils.review_needed import record_review_needed
     from src.utils.status_qa import check_extraction_qa_file
 
 # Configure logging
@@ -88,17 +90,36 @@ def _csv_b2_key(year, filename):
     return f"{B2_REPORTS_PREFIX}CSV_LF_{year}_Sorted/{filename}"
 
 
-def csv_artifact_passes_qa(csv_path: Path, year, week) -> bool:
+def _record_csv_review(review_context, check_type, reason):
+    if not review_context:
+        return
+    record_review_needed(
+        stage=review_context.get("stage", "SyncCombiningStatus"),
+        report_id=review_context.get("report_id"),
+        year=review_context.get("year"),
+        week=review_context.get("week"),
+        artifact_name=review_context.get("artifact_name"),
+        check_type=check_type,
+        reason=reason,
+        action=review_context.get("action"),
+    )
+
+
+def csv_artifact_passes_qa(csv_path: Path, year, week, review_context=None) -> bool:
     csv_qa_result = validate_extracted_csv(csv_path, expected_year=_expected_year(year), expected_week=week)
     if csv_qa_result.status != "pass":
-        logging.info(f"CSV QA failed for {csv_path.name}: {'; '.join(csv_qa_result.errors)}")
+        reason = f"CSV QA failed for {csv_path.name}: {'; '.join(csv_qa_result.errors)}"
+        logging.info(reason)
+        _record_csv_review(review_context, "csv_qa", reason)
         return False
 
     extraction_qa_path = extraction_qa_path_for_csv_path(csv_path)
     if extraction_qa_path and extraction_qa_path.exists():
         extraction_qa_result = check_extraction_qa_file(extraction_qa_path)
         if not extraction_qa_result.ok:
-            logging.info(f"Extraction QA failed for {csv_path.name}: {extraction_qa_result.reason}")
+            reason = f"Extraction QA failed for {csv_path.name}: {extraction_qa_result.reason}"
+            logging.info(reason)
+            _record_csv_review(review_context, "extraction_qa", reason)
             return False
 
     return True
@@ -274,7 +295,19 @@ def get_csvs_to_combine(report_map: Dict[str, Tuple[str, str, str, str]], local_
     for csv_name, (report_id, year, week, combined) in report_map.items():
         # If the file exists locally and hasn't been combined yet
         if csv_name in local_files and combined != 'Y':
-            if not csv_artifact_passes_qa(local_files[csv_name], year, week):
+            if not csv_artifact_passes_qa(
+                local_files[csv_name],
+                year,
+                week,
+                {
+                    "stage": "SyncCombiningStatus",
+                    "report_id": report_id,
+                    "year": year,
+                    "week": week,
+                    "artifact_name": csv_name,
+                    "action": "skip_combine_candidate",
+                },
+            ):
                 logging.info(f"Skipping {csv_name}; CSV/extraction QA did not pass.")
                 continue
             to_combine[csv_name] = (local_files[csv_name], report_id, year, week)
@@ -360,7 +393,19 @@ def sync_combining_status(engine):
             if csv_name not in local_csv_files:
                 logging.info(f"Report {report_id} is in lassa_data but local CSV {csv_name} is unavailable; not marking combined.")
                 continue
-            if not csv_artifact_passes_qa(local_csv_files[csv_name], year, week):
+            if not csv_artifact_passes_qa(
+                local_csv_files[csv_name],
+                year,
+                week,
+                {
+                    "stage": "SyncCombiningStatus",
+                    "report_id": report_id,
+                    "year": year,
+                    "week": week,
+                    "artifact_name": csv_name,
+                    "action": "block_combined_status",
+                },
+            ):
                 logging.info(f"Report {report_id} is in lassa_data but {csv_name} did not pass QA; not marking combined.")
                 continue
             ids_to_mark_combined.append(report_id)

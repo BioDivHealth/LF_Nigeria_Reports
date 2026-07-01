@@ -27,12 +27,14 @@ try:
     from utils.csv_qa import validate_extracted_csv
     from utils.db_utils import push_data_with_upsert
     from utils.data_validation import add_uuid_column
+    from utils.review_needed import record_review_needed
     from utils.status_qa import check_extraction_qa_file
 except ImportError:
     from src.utils.artifact_paths import csv_name_for_report, extraction_qa_path_for_csv_path
     from src.utils.csv_qa import validate_extracted_csv
     from src.utils.db_utils import push_data_with_upsert
     from src.utils.data_validation import add_uuid_column
+    from src.utils.review_needed import record_review_needed
     from src.utils.status_qa import check_extraction_qa_file
 
 # Define base directory
@@ -82,17 +84,39 @@ def _get_existing_lassa_report_ids(engine):
         return set()
 
 
-def csv_artifact_passes_qa(csv_path, year, week, logger):
+def csv_artifact_passes_qa(csv_path, year, week, logger, report_id=None):
     csv_qa_result = validate_extracted_csv(csv_path, expected_year=_expected_year(year), expected_week=week)
     if csv_qa_result.status != "pass":
-        logger.error(f"CSV QA failed for {csv_path.name}: {'; '.join(csv_qa_result.errors)}")
+        reason = f"CSV QA failed for {csv_path.name}: {'; '.join(csv_qa_result.errors)}"
+        logger.error(reason)
+        record_review_needed(
+            stage="PushToDB",
+            report_id=report_id,
+            year=year,
+            week=week,
+            artifact_name=csv_path.name,
+            check_type="csv_qa",
+            reason=reason,
+            action="skip_db_push",
+        )
         return False
 
     extraction_qa_path = extraction_qa_path_for_csv_path(csv_path)
     if extraction_qa_path and extraction_qa_path.exists():
         extraction_qa_result = check_extraction_qa_file(extraction_qa_path)
         if not extraction_qa_result.ok:
-            logger.error(f"Extraction QA failed for {csv_path.name}: {extraction_qa_result.reason}")
+            reason = f"Extraction QA failed for {csv_path.name}: {extraction_qa_result.reason}"
+            logger.error(reason)
+            record_review_needed(
+                stage="PushToDB",
+                report_id=report_id,
+                year=year,
+                week=week,
+                artifact_name=csv_path.name,
+                check_type="extraction_qa",
+                reason=reason,
+                action="skip_db_push",
+            )
             return False
 
     return True
@@ -170,7 +194,7 @@ def push_lassa_data_individually(engine):
             logger.debug(f"Skipping {csv_basename}; report {report_id} is already combined and present in lassa_data")
             continue
 
-        if not csv_artifact_passes_qa(csv_file, report_metadata["year"], report_metadata["week"], logger):
+        if not csv_artifact_passes_qa(csv_file, report_metadata["year"], report_metadata["week"], logger, report_id=report_id):
             logger.error(f"Skipping {csv_basename}; CSV/extraction QA did not pass")
             continue
 

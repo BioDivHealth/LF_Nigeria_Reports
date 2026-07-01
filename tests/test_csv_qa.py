@@ -198,12 +198,15 @@ class CsvQATests(unittest.TestCase):
             self.write_csv(output_dir / "Lines_Nigeria_01_Jan_26_W1_page3.csv", rows)
 
             with patch.object(module, "update_processing_status") as update_mock, \
-                patch.object(module, "get_enhanced_image") as image_mock:
+                patch.object(module, "get_enhanced_image") as image_mock, \
+                patch.object(module, "record_review_needed") as review_mock:
                 success = module.process_single_report(report_metadata, "gemini-test", object())
 
         self.assertFalse(success)
         update_mock.assert_not_called()
         image_mock.assert_not_called()
+        review_mock.assert_called_once()
+        self.assertEqual("csv_qa", review_mock.call_args.kwargs["check_type"])
 
 
 if __name__ == "__main__":

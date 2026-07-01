@@ -46,6 +46,7 @@ try:
     from utils.db_utils import get_db_engine
     from utils.logging_config import configure_logging
     from utils.cloud_storage import download_file, get_b2_report_filenames
+    from utils.review_needed import record_review_needed
     from utils.status_qa import QAStatusResult, check_layout_qa_file
 except ImportError:
     # This fallback is for when the script is run from the project root as part of main.py
@@ -58,6 +59,7 @@ except ImportError:
     from src.utils.db_utils import get_db_engine
     from src.utils.logging_config import configure_logging
     from src.utils.cloud_storage import download_file, get_b2_report_filenames
+    from src.utils.review_needed import record_review_needed
     from src.utils.status_qa import QAStatusResult, check_layout_qa_file
 
 # Configure logging
@@ -148,6 +150,15 @@ def sync_enhanced_status(engine, b2_filenames: Set[str], b2_layout_qa_filenames:
                 qa_result = _check_layout_qa_from_b2(year, enhanced_name, b2_layout_qa_filenames)
                 if qa_result.present and not qa_result.ok:
                     ids_to_mark_not_enhanced.append(row_id_text)
+                    record_review_needed(
+                        stage="SyncEnhancement",
+                        report_id=row_id_text,
+                        year=year,
+                        artifact_name=enhanced_name,
+                        check_type="layout_qa",
+                        reason=qa_result.reason,
+                        action="demote_enhanced",
+                    )
                     logging.info(
                         f"Layout QA failed for '{enhanced_name}' (ID: {row_id_text}): {qa_result.reason}. Queueing to mark as N."
                     )
@@ -202,6 +213,15 @@ def sync_enhanced_status(engine, b2_filenames: Set[str], b2_layout_qa_filenames:
                     if expected_enhanced_name in b2_filenames:
                         expected_layout_qa_name = layout_qa_name_for_enhanced(expected_enhanced_name)
                         if expected_layout_qa_name not in b2_layout_qa_filenames:
+                            record_review_needed(
+                                stage="SyncEnhancement",
+                                report_id=row_id_text,
+                                year=year,
+                                artifact_name=expected_enhanced_name,
+                                check_type="layout_qa",
+                                reason=f"Layout QA sidecar is missing in B2: {expected_layout_qa_name}",
+                                action="block_enhanced_status",
+                            )
                             logging.info(
                                 f"File '{expected_enhanced_name}' (ID: {row_id_text}) is in B2 but layout QA sidecar is missing in B2. Not marking enhanced."
                             )
@@ -209,6 +229,15 @@ def sync_enhanced_status(engine, b2_filenames: Set[str], b2_layout_qa_filenames:
 
                         qa_result = _check_layout_qa_from_b2(year, expected_enhanced_name, b2_layout_qa_filenames)
                         if not qa_result.ok:
+                            record_review_needed(
+                                stage="SyncEnhancement",
+                                report_id=row_id_text,
+                                year=year,
+                                artifact_name=expected_enhanced_name,
+                                check_type="layout_qa",
+                                reason=qa_result.reason,
+                                action="block_enhanced_status",
+                            )
                             logging.info(
                                 f"File '{expected_enhanced_name}' (ID: {row_id_text}) is in B2 but layout QA did not pass: {qa_result.reason}. Not marking enhanced."
                             )

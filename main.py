@@ -40,8 +40,10 @@ sys.path.insert(0, str(project_root))
 # Import centralized logging configuration
 try:
     from utils.logging_config import configure_logging
+    from utils.review_needed import summarize_review_needed
 except ImportError:
     from src.utils.logging_config import configure_logging
+    from src.utils.review_needed import summarize_review_needed
 
 # Configure logging
 configure_logging()
@@ -141,6 +143,7 @@ def collect_qa_artifact_counts(base_dir):
 def _summary_metrics(pipeline_success, completed_steps, total_steps, total_runtime_seconds, base_dir):
     export_rows = count_csv_data_rows(Path(base_dir) / "exports" / "lassa_data_latest.csv")
     qa_counts = collect_qa_artifact_counts(base_dir)
+    review_summary = summarize_review_needed(base_dir=base_dir)
     return {
         "overall_status": "success" if pipeline_success else "completed with errors",
         "completed_steps": completed_steps,
@@ -148,6 +151,7 @@ def _summary_metrics(pipeline_success, completed_steps, total_steps, total_runti
         "total_runtime": _format_duration(total_runtime_seconds),
         "export_rows": export_rows,
         "qa_counts": qa_counts,
+        "review_needed": review_summary,
     }
 
 
@@ -155,6 +159,7 @@ def format_pipeline_summary_text(step_summaries, pipeline_success, completed_ste
     metrics = _summary_metrics(pipeline_success, completed_steps, total_steps, total_runtime_seconds, base_dir)
     export_rows = metrics["export_rows"] if metrics["export_rows"] is not None else "unavailable"
     qa_counts = metrics["qa_counts"]
+    review_needed = metrics["review_needed"]
     lines = [
         "Pipeline run summary",
         f"Overall status: {metrics['overall_status']}",
@@ -167,6 +172,7 @@ def format_pipeline_summary_text(step_summaries, pipeline_success, completed_ste
             f"extraction_qa={qa_counts['extraction_qa']}, "
             f"differing_outputs={qa_counts['differing_outputs']}"
         ),
+        f"Review needed: {review_needed['total']}",
         "Step timings:",
     ]
 
@@ -188,6 +194,7 @@ def format_pipeline_summary_markdown(step_summaries, pipeline_success, completed
     metrics = _summary_metrics(pipeline_success, completed_steps, total_steps, total_runtime_seconds, base_dir)
     export_rows = metrics["export_rows"] if metrics["export_rows"] is not None else "unavailable"
     qa_counts = metrics["qa_counts"]
+    review_needed = metrics["review_needed"]
     qa_summary = (
         f"layout_qa={qa_counts['layout_qa']}, "
         f"extraction_qa={qa_counts['extraction_qa']}, "
@@ -204,6 +211,7 @@ def format_pipeline_summary_markdown(step_summaries, pipeline_success, completed
         f"| Total runtime | {metrics['total_runtime']} |",
         f"| Latest export rows | {export_rows} |",
         f"| QA artifacts | {_markdown_cell(qa_summary)} |",
+        f"| Review needed | {review_needed['total']} |",
         "",
         "| Step | Status | Duration | Note |",
         "| --- | --- | --- | --- |",

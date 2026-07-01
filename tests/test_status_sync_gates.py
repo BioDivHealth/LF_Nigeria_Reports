@@ -126,14 +126,52 @@ class StatusSyncGateTests(unittest.TestCase):
         )
 
         with patch.object(module, "Session", lambda engine: session):
-            module.sync_enhanced_status(
-                object(),
-                {"Lines_Nigeria_01_Jan_26_W1_page3.png"},
-                set(),
-            )
+            with patch.object(module, "record_review_needed") as review_mock:
+                module.sync_enhanced_status(
+                    object(),
+                    {"Lines_Nigeria_01_Jan_26_W1_page3.png"},
+                    set(),
+                )
 
         self.assertEqual([], session.params_for_sql_containing("SET enhanced = 'Y'"))
         self.assertEqual([], session.params_for_sql_containing("SET enhanced_name"))
+        review_mock.assert_called_once()
+        self.assertEqual("block_enhanced_status", review_mock.call_args.kwargs["action"])
+
+    def test_03a_records_review_needed_when_layout_qa_fails(self):
+        module = load_stage_module("03a_SyncEnhancement.py", "sync_enhancement_review_needed")
+        session = FakeSession(
+            [
+                ("WHERE enhanced = 'Y'", [("report-1", "Lines_Nigeria_01_Jan_26_W1_page3.png", "Nigeria_01_Jan_26_W1.pdf", "26")]),
+                ("WHERE (enhanced = 'N'", []),
+            ]
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            module.ENHANCED_FOLDER = Path(temp_dir)
+            layout_qa_path = (
+                module.ENHANCED_FOLDER
+                / "PDFs_Lines_26"
+                / "Lines_Nigeria_01_Jan_26_W1_page3.layout_qa.json"
+            )
+            layout_qa_path.parent.mkdir(parents=True)
+            layout_qa_path.write_text(
+                json.dumps({"status": "fail", "confidence": "none", "selected_page_index": None}),
+                encoding="utf-8",
+            )
+
+            with patch.object(module, "Session", lambda engine: session), \
+                patch.object(module, "record_review_needed") as review_mock:
+                module.sync_enhanced_status(
+                    object(),
+                    {"Lines_Nigeria_01_Jan_26_W1_page3.png"},
+                    {"Lines_Nigeria_01_Jan_26_W1_page3.layout_qa.json"},
+                )
+
+        self.assertEqual([{"ids_list": ["report-1"]}], session.params_for_sql_containing("SET enhanced = 'N'"))
+        review_mock.assert_called_once()
+        self.assertEqual("layout_qa", review_mock.call_args.kwargs["check_type"])
+        self.assertEqual("demote_enhanced", review_mock.call_args.kwargs["action"])
 
     def test_04a_does_not_mark_processed_from_csv_only_b2_evidence(self):
         module = load_stage_module("04a_SyncProcessed.py", "sync_processed_csv_only_gate")
@@ -149,10 +187,13 @@ class StatusSyncGateTests(unittest.TestCase):
             module.CSV_BASE_FOLDER = Path(temp_dir)
             write_csv(module.CSV_BASE_FOLDER / "CSV_LF_26_Sorted" / csv_name)
 
-            with patch.object(module, "Session", lambda engine: session):
+            with patch.object(module, "Session", lambda engine: session), \
+                patch.object(module, "record_review_needed") as review_mock:
                 module.sync_processed_status(object(), {csv_name}, set())
 
         self.assertEqual([], session.params_for_sql_containing("SET processed = 'Y'"))
+        review_mock.assert_called_once()
+        self.assertEqual("block_processed_status", review_mock.call_args.kwargs["action"])
 
     def test_04a_does_not_download_historical_processed_csv_for_demote_check(self):
         module = load_stage_module("04a_SyncProcessed.py", "sync_processed_existing_no_bulk_download")
@@ -167,10 +208,12 @@ class StatusSyncGateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             module.CSV_BASE_FOLDER = Path(temp_dir)
             with patch.object(module, "Session", lambda engine: session), \
-                patch.object(module, "download_file") as download_mock:
+                patch.object(module, "download_file") as download_mock, \
+                patch.object(module, "record_review_needed") as review_mock:
                 module.sync_processed_status(object(), {csv_name}, set())
 
         download_mock.assert_not_called()
+        review_mock.assert_not_called()
         self.assertEqual([], session.params_for_sql_containing("SET processed = 'N'"))
         self.assertEqual([], session.params_for_sql_containing("SET processed = 'Y'"))
 
@@ -206,6 +249,35 @@ class StatusSyncGateTests(unittest.TestCase):
         update_params = session.params_for_sql_containing("SET processed = 'Y'")
         self.assertEqual([{"ids_list": ["report-1"]}], update_params)
 
+    def test_04a_records_review_needed_when_extraction_qa_fails(self):
+        module = load_stage_module("04a_SyncProcessed.py", "sync_processed_review_needed")
+        csv_name = "Lines_Nigeria_01_Jan_26_W1_page3.csv"
+        qa_name = "Lines_Nigeria_01_Jan_26_W1_page3.extraction_qa.json"
+        session = FakeSession(
+            [
+                ("WHERE processed = 'Y'", []),
+                ("WHERE (processed IS NULL", [("report-1", "Nigeria_01_Jan_26_W1.pdf", "Lines_Nigeria_01_Jan_26_W1_page3.png", "26", "1")]),
+            ]
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            module.CSV_BASE_FOLDER = Path(temp_dir)
+            csv_path = module.CSV_BASE_FOLDER / "CSV_LF_26_Sorted" / csv_name
+            write_csv(csv_path)
+            csv_path.with_suffix(".extraction_qa.json").write_text(
+                json.dumps({"status": "fail", "validation": {"status": "fail"}}),
+                encoding="utf-8",
+            )
+
+            with patch.object(module, "Session", lambda engine: session), \
+                patch.object(module, "record_review_needed") as review_mock:
+                module.sync_processed_status(object(), {csv_name}, {qa_name})
+
+        self.assertEqual([], session.params_for_sql_containing("SET processed = 'Y'"))
+        review_mock.assert_called_once()
+        self.assertEqual("block_processed_status", review_mock.call_args.kwargs["action"])
+        self.assertEqual("extraction_qa", review_mock.call_args.kwargs["check_type"])
+
     def test_05a_excludes_invalid_csvs_from_combine_candidates(self):
         module = load_stage_module("05a_SyncCombiningStatus.py", "sync_combining_qa_gate")
         csv_name = "Lines_Nigeria_01_Jan_26_W1_page3.csv"
@@ -214,12 +286,15 @@ class StatusSyncGateTests(unittest.TestCase):
             csv_path = Path(temp_dir) / csv_name
             write_csv(csv_path, confirmed="not a number")
 
-            result = module.get_csvs_to_combine(
-                {csv_name: ("report-1", "26", "1", "N")},
-                {csv_name: csv_path},
-            )
+            with patch.object(module, "record_review_needed") as review_mock:
+                result = module.get_csvs_to_combine(
+                    {csv_name: ("report-1", "26", "1", "N")},
+                    {csv_name: csv_path},
+                )
 
         self.assertEqual({}, result)
+        review_mock.assert_called_once()
+        self.assertEqual("skip_combine_candidate", review_mock.call_args.kwargs["action"])
 
     def test_05c_refuses_combined_advancement_when_csv_qa_fails(self):
         module = load_stage_module("05c_CombinedStatus.py", "combined_status_qa_gate")
@@ -237,11 +312,40 @@ class StatusSyncGateTests(unittest.TestCase):
             with patch.object(module, "Session", lambda engine: session), \
                 patch.object(module, "find_local_csv_files", return_value={csv_name: csv_path}), \
                 patch.object(module, "get_existing_records", return_value={"report-1"}), \
-                patch.object(module, "update_combined_status") as update_mock:
+                patch.object(module, "update_combined_status") as update_mock, \
+                patch.object(module, "record_review_needed") as review_mock:
                 result = module.sync_combining_status(object())
 
         self.assertEqual([], result)
         update_mock.assert_not_called()
+        review_mock.assert_called_once()
+        self.assertEqual("block_combined_status", review_mock.call_args.kwargs["action"])
+
+    def test_05b_records_review_needed_when_db_push_csv_qa_fails(self):
+        module = load_stage_module("05b_PushToDB.py", "push_to_db_review_needed")
+        csv_name = "Lines_Nigeria_01_Jan_26_W1_page3.csv"
+        engine = FakeEngine(
+            [
+                (
+                    "FROM website_data",
+                    [("report-1", "Nigeria_01_Jan_26_W1.pdf", "Lines_Nigeria_01_Jan_26_W1_page3.png", "26", "1", "N")],
+                ),
+                ("FROM lassa_data", []),
+            ]
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            module.BASE_DIR = Path(temp_dir)
+            write_csv(Path(temp_dir) / "data" / "processed" / "CSV" / "CSV_LF_26_Sorted" / csv_name, confirmed="bad")
+
+            with patch.object(module, "record_review_needed") as review_mock, \
+                patch.object(module, "load_and_normalize_csv") as load_mock:
+                affected_rows = module.push_lassa_data_individually(engine)
+
+        self.assertEqual(0, affected_rows)
+        load_mock.assert_not_called()
+        review_mock.assert_called_once()
+        self.assertEqual("skip_db_push", review_mock.call_args.kwargs["action"])
 
     def test_05b_skips_already_combined_csv_when_db_rows_exist(self):
         module = load_stage_module("05b_PushToDB.py", "push_to_db_skip_combined")

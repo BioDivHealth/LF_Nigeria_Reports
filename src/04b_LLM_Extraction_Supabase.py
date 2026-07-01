@@ -57,6 +57,7 @@ try:
     from utils.extraction_validation import validate_extraction_results
     from utils.cloud_storage import download_file, get_b2_report_filenames
     from utils.db_utils import get_db_engine
+    from utils.review_needed import record_review_needed
 except ImportError:
     # Fall back to relative import (when run from main.py)
     from src.utils.artifact_paths import (
@@ -77,6 +78,7 @@ except ImportError:
     from src.utils.extraction_validation import validate_extraction_results
     from src.utils.cloud_storage import download_file, get_b2_report_filenames
     from src.utils.db_utils import get_db_engine
+    from src.utils.review_needed import record_review_needed
 
 # Set third-party loggers to higher levels
 for logger_name in ["google", "google.genai", "google.api_core", "httpx", "httpcore"]: 
@@ -225,6 +227,19 @@ def update_processing_status(engine, report_id, status='Y'):
             logging.error(f"Error updating processed status for report {report_id}: {e}")
 
 
+def _record_extraction_review(report_id, year, week, artifact_name, check_type, reason, action="skip_extraction"):
+    record_review_needed(
+        stage="LLM_Extraction_Supabase",
+        report_id=report_id,
+        year=year,
+        week=week,
+        artifact_name=artifact_name,
+        check_type=check_type,
+        reason=reason,
+        action=action,
+    )
+
+
 def process_single_report(report_metadata, model_name, engine):
     """
     Process a single Lassa fever report.
@@ -245,13 +260,17 @@ def process_single_report(report_metadata, model_name, engine):
     
     # Skip if no enhanced_name is provided
     if not enhanced_name:
-        logging.warning(f"No enhanced image name for Year {year}, Week {week}")
+        reason = f"No enhanced image name for Year {year}, Week {week}"
+        logging.warning(reason)
+        _record_extraction_review(report_id, year, week, None, "extraction_input", reason)
         return False
     
     csv_name = csv_name_for_enhanced(enhanced_name)
     output_path = csv_path(CSV_BASE_FOLDER, year, csv_name)
     if not output_path:
-        logging.warning(f"Could not derive CSV path for enhanced image {enhanced_name}")
+        reason = f"Could not derive CSV path for enhanced image {enhanced_name}"
+        logging.warning(reason)
+        _record_extraction_review(report_id, year, week, enhanced_name, "artifact_path", reason)
         return False
 
     # Output folder for CSV files
@@ -274,7 +293,17 @@ def process_single_report(report_metadata, model_name, engine):
         if csv_qa_result.status != "pass":
             for error in csv_qa_result.errors:
                 logging.error(f"Existing CSV QA failed for {base_filename}.csv: {error}")
-            logging.error(f"Existing CSV failed QA and will not be marked processed: {output_path}")
+            reason = f"Existing CSV failed QA and will not be marked processed: {output_path}"
+            logging.error(reason)
+            _record_extraction_review(
+                report_id,
+                year,
+                week,
+                csv_name,
+                "csv_qa",
+                f"{reason}: {'; '.join(csv_qa_result.errors)}",
+                action="skip_existing_csv_processing",
+            )
             return False
 
         # Update status in Supabase only after the local CSV passes QA
@@ -296,7 +325,9 @@ def process_single_report(report_metadata, model_name, engine):
     # Get enhanced image - checks locally first, then downloads from B2 if needed
     input_path = get_enhanced_image(enhanced_name, year)
     if not input_path:
-        logging.warning(f"Enhanced image not available: {enhanced_name}")
+        reason = f"Enhanced image not available: {enhanced_name}"
+        logging.warning(reason)
+        _record_extraction_review(report_id, year, week, enhanced_name, "enhanced_image", reason)
         return False
     
     logging.info(f"Processing {enhanced_name} (Year: {year}, Week: {week})")
@@ -360,6 +391,14 @@ def process_single_report(report_metadata, model_name, engine):
                     if csv_qa_result.status != "pass":
                         for error in csv_qa_result.errors:
                             logging.error(f"CSV QA failed for {base_filename}.csv: {error}")
+                        _record_extraction_review(
+                            report_id,
+                            year,
+                            week,
+                            csv_name,
+                            "csv_qa",
+                            f"CSV QA failed for {base_filename}.csv: {'; '.join(csv_qa_result.errors)}",
+                        )
                         return False
 
                     layout_qa_path = layout_qa_path_for_enhanced_path(input_path)
@@ -382,7 +421,9 @@ def process_single_report(report_metadata, model_name, engine):
                     update_processing_status(engine, report_id)
                     return True
                 else:
-                    logging.error(f"Error writing CSV for image {enhanced_name}")
+                    reason = f"Error writing CSV for image {enhanced_name}"
+                    logging.error(reason)
+                    _record_extraction_review(report_id, year, week, csv_name, "csv_write", reason)
                     return False
 
             if validation_result.comparison_1 or validation_result.comparison_2:
@@ -403,15 +444,28 @@ def process_single_report(report_metadata, model_name, engine):
                 attempt += 1
                 continue
 
-            logging.error(f"Failed to get acceptable extraction output for image: {enhanced_name} (attempt {attempt}/{max_attempts})")
+            reason = f"Failed to get acceptable extraction output for image: {enhanced_name} (attempt {attempt}/{max_attempts})"
+            logging.error(reason)
+            _record_extraction_review(
+                report_id,
+                year,
+                week,
+                enhanced_name,
+                "extraction_validation",
+                f"{reason}: {'; '.join(validation_result.errors or validation_result.warnings)}",
+            )
             return False
         
         # If we've exhausted all attempts without success
-        logging.error(f"Failed to extract consistent data after {max_attempts} attempts for {enhanced_name}")
+        reason = f"Failed to extract consistent data after {max_attempts} attempts for {enhanced_name}"
+        logging.error(reason)
+        _record_extraction_review(report_id, year, week, enhanced_name, "extraction_validation", reason)
         return False
         
     except Exception as e:
-        logging.error(f"Error processing {enhanced_name}: {e}")
+        reason = f"Error processing {enhanced_name}: {e}"
+        logging.error(reason)
+        _record_extraction_review(report_id, year, week, enhanced_name, "extraction_exception", reason)
         return False
 
 def process_reports_from_supabase(model_name="gemini-2.0-flash"):

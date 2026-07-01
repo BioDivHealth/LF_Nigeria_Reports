@@ -47,6 +47,7 @@ try:
     from utils.db_utils import get_db_engine
     from utils.logging_config import configure_logging
     from utils.cloud_storage import download_file, get_b2_report_filenames
+    from utils.review_needed import record_review_needed
     from utils.status_qa import QAStatusResult, check_extraction_qa_file
 except ImportError:
     # This fallback is for when the script is run from the project root as part of main.py
@@ -60,6 +61,7 @@ except ImportError:
     from src.utils.db_utils import get_db_engine
     from src.utils.logging_config import configure_logging
     from src.utils.cloud_storage import download_file, get_b2_report_filenames
+    from src.utils.review_needed import record_review_needed
     from src.utils.status_qa import QAStatusResult, check_extraction_qa_file
 
 # Configure logging
@@ -93,6 +95,15 @@ def _expected_year(year):
 
 def _csv_b2_key(year, csv_name):
     return f"{B2_REPORTS_PREFIX}CSV_LF_{year}_Sorted/{csv_name}"
+
+
+def _check_type_for_processed_result(qa_result):
+    reason = (qa_result.reason or "").lower()
+    if "csv qa" in reason:
+        return "csv_qa"
+    if "extraction" in reason or "sidecar" in reason:
+        return "extraction_qa"
+    return "processed_artifact_qa"
 
 
 def _download_csv_if_needed(year, csv_name):
@@ -219,6 +230,16 @@ def sync_processed_status(engine, b2_filenames: Set[str], b2_extraction_qa_filen
                 qa_result = _check_existing_processed_artifact(year, week, expected_csv_name, b2_extraction_qa_filenames)
                 if qa_result.present and not qa_result.ok:
                     ids_to_mark_not_processed.append(row_id_text)
+                    record_review_needed(
+                        stage="SyncProcessed",
+                        report_id=row_id_text,
+                        year=year,
+                        week=week,
+                        artifact_name=expected_csv_name,
+                        check_type=_check_type_for_processed_result(qa_result),
+                        reason=qa_result.reason,
+                        action="demote_processed",
+                    )
                     logging.info(
                         f"Processed artifact QA failed for '{expected_csv_name}' (ID: {row_id_text}): {qa_result.reason}. Queueing to mark as N."
                     )
@@ -262,6 +283,16 @@ def sync_processed_status(engine, b2_filenames: Set[str], b2_extraction_qa_filen
                 if expected_csv_name in b2_filenames:
                     expected_extraction_qa_name = extraction_qa_name_for_csv(expected_csv_name)
                     if expected_extraction_qa_name not in b2_extraction_qa_filenames:
+                        record_review_needed(
+                            stage="SyncProcessed",
+                            report_id=row_id_text,
+                            year=year,
+                            week=week,
+                            artifact_name=expected_csv_name,
+                            check_type="extraction_qa",
+                            reason=f"Extraction QA sidecar is missing in B2: {expected_extraction_qa_name}",
+                            action="block_processed_status",
+                        )
                         logging.info(
                             f"File '{expected_csv_name}' (ID: {row_id_text}) is in B2 but extraction QA sidecar is missing in B2. Not marking processed."
                         )
@@ -276,6 +307,16 @@ def sync_processed_status(engine, b2_filenames: Set[str], b2_extraction_qa_filen
                         require_extraction_qa=True,
                     )
                     if not qa_result.ok:
+                        record_review_needed(
+                            stage="SyncProcessed",
+                            report_id=row_id_text,
+                            year=year,
+                            week=week,
+                            artifact_name=expected_csv_name,
+                            check_type=_check_type_for_processed_result(qa_result),
+                            reason=qa_result.reason,
+                            action="block_processed_status",
+                        )
                         logging.info(
                             f"File '{expected_csv_name}' (ID: {row_id_text}) is in B2 but processed QA did not pass: {qa_result.reason}. Not marking processed."
                         )
