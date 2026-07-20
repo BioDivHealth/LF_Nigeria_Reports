@@ -119,6 +119,11 @@ This executes the following steps in order:
 11. **CloudSync** (`src/06_CloudSync.py`)
 12. **ExportData** (`src/07_ExportData.py`)
 
+Enhancement and extraction attempt every eligible report and preserve successful
+report-level work. If either stage has failures, the run is marked failed after
+the attempts finish, QA artifacts still upload, and `ExportData` is skipped so
+GitHub and Supabase Storage are not refreshed from an incomplete run.
+
 ## Data Flow
 
 1. **Raw PDFs**: `data/raw/`, `PDFs_Sourced/`

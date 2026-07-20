@@ -13,10 +13,11 @@ from main import (
 
 
 class PipelineSummaryTests(unittest.TestCase):
-    def test_formats_successful_and_failed_step_rows(self):
+    def test_formats_successful_failed_and_skipped_step_rows(self):
         steps = [
-            PipelineStepSummary(1, 2, "URL_Sourcing", "success", 1.234),
-            PipelineStepSummary(2, 2, "ExportData", "failed", 0.5, "boom | pipe"),
+            PipelineStepSummary(1, 3, "URL_Sourcing", "success", 1.234),
+            PipelineStepSummary(2, 3, "TableEnhancement", "failed", 0.5, "boom | pipe"),
+            PipelineStepSummary(3, 3, "ExportData", "skipped", 0.0, "upstream failure"),
         ]
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -24,7 +25,7 @@ class PipelineSummaryTests(unittest.TestCase):
                 steps,
                 pipeline_success=False,
                 completed_steps=1,
-                total_steps=2,
+                total_steps=3,
                 total_runtime_seconds=1.734,
                 base_dir=Path(temp_dir),
             )
@@ -32,18 +33,20 @@ class PipelineSummaryTests(unittest.TestCase):
                 steps,
                 pipeline_success=False,
                 completed_steps=1,
-                total_steps=2,
+                total_steps=3,
                 total_runtime_seconds=1.734,
                 base_dir=Path(temp_dir),
             )
 
         self.assertIn("Overall status: completed with errors", text)
-        self.assertIn("Steps completed: 1/2", text)
+        self.assertIn("Steps completed: 1/3", text)
         self.assertIn("Review needed: 0", text)
         self.assertIn("| Review needed | 0 |", markdown)
-        self.assertIn("1/2 URL_Sourcing: success in 1.23s", text)
-        self.assertIn("2/2 ExportData: failed in 0.50s - boom | pipe", text)
-        self.assertIn("| 2/2 ExportData | failed | 0.50s | boom \\| pipe |", markdown)
+        self.assertIn("1/3 URL_Sourcing: success in 1.23s", text)
+        self.assertIn("2/3 TableEnhancement: failed in 0.50s - boom | pipe", text)
+        self.assertIn("3/3 ExportData: skipped in 0.00s - upstream failure", text)
+        self.assertIn("| 2/3 TableEnhancement | failed | 0.50s | boom \\| pipe |", markdown)
+        self.assertIn("| 3/3 ExportData | skipped | 0.00s | upstream failure |", markdown)
 
     def test_includes_export_row_count_and_qa_counts(self):
         steps = [PipelineStepSummary(1, 1, "ExportData", "success", 2.0)]

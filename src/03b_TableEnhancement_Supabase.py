@@ -46,6 +46,7 @@ try:
     from utils.db_utils import get_db_engine
     from utils.logging_config import configure_logging
     from utils.report_layout import find_table3_page
+    from utils.review_needed import record_review_needed
     from utils.table_enhancement import DEFAULT_PARAMS, enhance_table_lines_from_pdf_hq
     import importlib.util
     # Import the sync_enhanced_status function from 03a_SyncEnhancement.py
@@ -63,6 +64,7 @@ except ImportError:
     from src.utils.db_utils import get_db_engine
     from src.utils.logging_config import configure_logging
     from src.utils.report_layout import find_table3_page
+    from src.utils.review_needed import record_review_needed
     from src.utils.table_enhancement import DEFAULT_PARAMS, enhance_table_lines_from_pdf_hq
     import importlib.util
     # Import the sync_enhanced_status function from 03a_SyncEnhancement.py
@@ -84,6 +86,7 @@ except ImportError:
     from src.utils.db_utils import get_db_engine
     from src.utils.logging_config import configure_logging
     from src.utils.report_layout import find_table3_page
+    from src.utils.review_needed import record_review_needed
     from src.utils.table_enhancement import DEFAULT_PARAMS, enhance_table_lines_from_pdf_hq
     import importlib.util
     # Import the sync_enhanced_status function from 03_SyncEnhancement
@@ -184,10 +187,9 @@ def download_file_from_b2(b2_key: str, destination: Path) -> Optional[Path]:
         success = download_file(b2_key, str(destination))
         if success:
             logging.info(f"Successfully downloaded {b2_filename} from B2")
-            return None
-        else:
-            logging.error(f"Failed to download {b2_filename} from B2")
-            return None
+            return Path(destination)
+        logging.error(f"Failed to download {b2_filename} from B2")
+        return None
     except Exception as e:
         logging.error(f"Error downloading {b2_filename} from B2: {e}")
         return None
@@ -229,7 +231,7 @@ def get_reports_to_enhance(engine) -> List[Dict]:
             return reports
         except Exception as e:
             logging.error(f"Error querying Supabase for reports to enhance: {e}")
-            return []
+            raise RuntimeError("Could not query reports requiring enhancement.") from e
 
 def update_enhanced_status(engine, report_id: str, enhanced_name: str, status: str = 'Y'):
     """Update the enhanced status in Supabase.
@@ -258,74 +260,108 @@ def update_enhanced_status(engine, report_id: str, enhanced_name: str, status: s
         except Exception as e:
             session.rollback()
             logging.error(f"Error updating enhanced status for report {report_id}: {e}")
+            raise RuntimeError(f"Could not update enhanced status for report {report_id}.") from e
+
+
+def record_enhancement_failure(report, enhanced_name, check_type, reason):
+    """Record an enhancement failure and return its concise description."""
+    message = str(reason).strip()
+    record_review_needed(
+        stage="TableEnhancement_Supabase",
+        report_id=report.get("id"),
+        year=report.get("year"),
+        week=report.get("week"),
+        artifact_name=enhanced_name,
+        check_type=check_type,
+        reason=message,
+        action="block_enhanced_status",
+    )
+    return message
 
 def process_reports_from_supabase():
     """Main function to process and enhance Lassa fever report tables."""
     logging.info("Starting Lassa fever report table enhancement process")
-    
-    # Connect to Supabase
+
     engine = get_db_engine(DATABASE_URL)
     if not engine:
-        logging.error("Failed to connect to Supabase. Check DATABASE_URL environment variable.")
-        return
-    
+        raise RuntimeError("Failed to connect to Supabase. Check DATABASE_URL environment variable.")
+
     b2_pdfs = get_b2_report_filenames(B2_RAW_PREFIX, ".pdf")
-    
     logging.info(f"File names in B2: {b2_pdfs}")
-    
+
     reports = get_reports_to_enhance(engine)
     if not reports:
         logging.info("No reports to enhance")
         return
     logging.info(f"Found {len(reports)} reports to enhance")
     logging.info(f"Reports: {reports}")
-    
 
+    failures = []
     for report in reports:
-            report_id = report['id']
-            new_name = report['new_name']
-            year = report['year']
-            week = report['week']
-            enhanced_name = enhanced_name_for_report(new_name)
-            output_path = enhanced_image_path(ENHANCED_FOLDER, year, enhanced_name)
-            if not output_path:
-                logging.warning(f"Could not derive enhanced artifact path for report {report_id} ({new_name})")
-                continue
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            if output_path.exists():
+        report_id = report['id']
+        new_name = report['new_name']
+        year = report['year']
+        week = report['week']
+        enhanced_name = enhanced_name_for_report(new_name)
+        output_path = enhanced_image_path(ENHANCED_FOLDER, year, enhanced_name)
+        if not output_path:
+            reason = f"Could not derive enhanced artifact path for report {report_id} ({new_name})."
+            logging.error(reason)
+            failures.append(record_enhancement_failure(report, enhanced_name, "artifact_path", reason))
+            continue
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        if output_path.exists():
+            try:
                 logging.info(f"Enhanced image {enhanced_name} already exists in {output_path}")
                 update_enhanced_status(engine, report_id, enhanced_name)
+            except Exception as exc:
+                failures.append(
+                    record_enhancement_failure(report, enhanced_name, "status_update", str(exc))
+                )
+            continue
+
+        pdf_path = RAW_FOLDER / str(year) / new_name
+        if pdf_path.exists():
+            logging.info(f"Report {new_name} already exists in {pdf_path}")
+        elif new_name in b2_pdfs:
+            logging.info(f"Report {new_name} exists in B2, can be downloaded")
+            b2_key = f"{B2_RAW_PREFIX}{year}/{new_name}"
+            if not download_file_from_b2(b2_key, destination=pdf_path):
+                reason = f"Could not download raw report from B2: {new_name}."
+                logging.error(reason)
+                failures.append(record_enhancement_failure(report, enhanced_name, "source_pdf", reason))
                 continue
-            if (RAW_FOLDER / str(year) / new_name).exists():
-                logging.info(f"Report {new_name} already exists in {RAW_FOLDER / str(year) / new_name}")
-                try:
-                    logging.info(f"Enhancing {new_name} (Year: {year}, Week: {week})")
-                    upload_success = enhance_report_pdf(RAW_FOLDER / str(year) / new_name, output_path, year, week)
-                    if upload_success:
-                        update_enhanced_status(engine, report_id, enhanced_name)
-                        logging.info(f"Successfully enhanced {new_name} (Year: {year}, Week: {week})")
-                except Exception as e:
-                    logging.error(f"Error enhancing {new_name}: {e}")
-                    continue
-            elif new_name in b2_pdfs:
-                logging.info(f"Report {new_name} exists in B2, can be downloaded")
-                b2_key = f"{B2_RAW_PREFIX}{year}/{new_name}"
-                download_file_from_b2(b2_key, destination=f"{RAW_FOLDER}/{year}/{new_name}")
-                time.sleep(5)
-                try:
-                    logging.info(f"Enhancing {new_name} (Year: {year}, Week: {week})")
-                    upload_success = enhance_report_pdf(RAW_FOLDER / str(year) / new_name, output_path, year, week)
-                    if upload_success:
-                        update_enhanced_status(engine, report_id, enhanced_name)
-                        logging.info(f"Successfully enhanced {new_name} (Year: {year}, Week: {week})")
-                except Exception as e:
-                    logging.error(f"Error enhancing {new_name}: {e}")
-                    continue
-            else:
-                logging.info(f"Raw report {new_name} does not exist in B2 or locally")  
+            time.sleep(5)
+        else:
+            reason = f"Raw report {new_name} does not exist in B2 or locally."
+            logging.error(reason)
+            failures.append(record_enhancement_failure(report, enhanced_name, "source_pdf", reason))
+            continue
+
+        try:
+            logging.info(f"Enhancing {new_name} (Year: {year}, Week: {week})")
+            enhancement_succeeded = enhance_report_pdf(pdf_path, output_path, year, week)
+            if not enhancement_succeeded:
+                reason = f"Layout QA blocked table enhancement for {new_name}."
+                failures.append(record_enhancement_failure(report, enhanced_name, "layout_qa", reason))
                 continue
-            
+
+            update_enhanced_status(engine, report_id, enhanced_name)
+            logging.info(f"Successfully enhanced {new_name} (Year: {year}, Week: {week})")
+        except Exception as exc:
+            reason = f"Error enhancing {new_name}: {exc}"
+            logging.error(reason, exc_info=True)
+            failures.append(
+                record_enhancement_failure(report, enhanced_name, "table_enhancement", reason)
+            )
+
     logging.info("Finished processing reports")
+    if failures:
+        raise RuntimeError(
+            f"Table enhancement failed for {len(failures)}/{len(reports)} reports. "
+            "See review_needed.jsonl for details."
+        )
 
 def main():
     process_reports_from_supabase()

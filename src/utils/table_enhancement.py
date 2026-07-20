@@ -41,6 +41,23 @@ def detect_green_rows(hsv, lower_green, upper_green, pdf_path):
     return green_row_indices[0], green_row_indices[-1]
 
 
+def normalize_hough_lines(lines):
+    """Return Hough line coordinates as ``(x1, y1, x2, y2)`` rows."""
+    if lines is None:
+        return []
+
+    line_array = np.asarray(lines)
+    if line_array.size == 0:
+        return []
+    if line_array.size % 4 != 0:
+        raise ValueError(
+            f"Malformed Hough line result with shape {line_array.shape}; "
+            "expected a coordinate count divisible by 4."
+        )
+
+    return line_array.reshape(-1, 4)
+
+
 def process_vertical_lines(thresh_table, tr1, linelength1, linegap1):
     """Find vertical lines using Hough transform."""
     lines = cv2.HoughLinesP(
@@ -52,23 +69,23 @@ def process_vertical_lines(thresh_table, tr1, linelength1, linegap1):
         maxLineGap=linegap1,
     )
     vertical_lines = []
-    if lines is not None:
-        for line in lines:
-            x1, y1, x2, y2 = line[0]
-            if abs(x2 - x1) < 5:
-                vertical_lines.append((x1, y1, x2, y2))
+    for x1, y1, x2, y2 in normalize_hough_lines(lines):
+        if abs(x2 - x1) < 5:
+            vertical_lines.append((x1, y1, x2, y2))
     return vertical_lines
 
 
 def process_horizontal_lines(thresh_table):
     """Find horizontal lines using Hough transform."""
-    return cv2.HoughLinesP(
-        thresh_table,
-        1,
-        np.pi / 180,
-        threshold=400,
-        minLineLength=50,
-        maxLineGap=10,
+    return normalize_hough_lines(
+        cv2.HoughLinesP(
+            thresh_table,
+            1,
+            np.pi / 180,
+            threshold=400,
+            minLineLength=50,
+            maxLineGap=10,
+        )
     )
 
 
@@ -127,13 +144,11 @@ def enhance_table_lines_from_pdf_hq(
             cv2.line(img, (x1, top_boundary - 110), (x2, bottom_boundary + 10), (100, 100, 100), 2)
 
         lines_h = process_horizontal_lines(thresh_table)
-        if lines_h is not None:
-            for line in lines_h:
-                x1, y1, x2, y2 = line[0]
-                if abs(y2 - y1) < 5:
-                    y1_global = y1 + top_boundary
-                    y2_global = y2 + top_boundary
-                    cv2.line(img, (x1, y1_global), (x2, y2_global), (100, 100, 100), 1)
+        for x1, y1, x2, y2 in lines_h:
+            if abs(y2 - y1) < 5:
+                y1_global = y1 + top_boundary
+                y2_global = y2 + top_boundary
+                cv2.line(img, (x1, y1_global), (x2, y2_global), (100, 100, 100), 1)
 
         if year == "20":
             crop_bottom = min(bottom_boundary + 120, img.shape[0])

@@ -147,6 +147,7 @@ def get_reports_to_process(engine):
             
         except Exception as e:
             logging.error(f"Error querying reports to process: {e}")
+            raise RuntimeError("Could not query reports requiring extraction.") from e
     
     return reports
 
@@ -225,6 +226,7 @@ def update_processing_status(engine, report_id, status='Y'):
         except Exception as e:
             session.rollback()
             logging.error(f"Error updating processed status for report {report_id}: {e}")
+            raise RuntimeError(f"Could not update processed status for report {report_id}.") from e
 
 
 def _record_extraction_review(report_id, year, week, artifact_name, check_type, reason, action="skip_extraction"):
@@ -482,8 +484,7 @@ def process_reports_from_supabase(model_name="gemini-2.0-flash"):
     
     # Critical environment variable checks
     if not DATABASE_URL:
-        logging.error("CRITICAL: DATABASE_URL environment variable not set. Exiting.")
-        return
+        raise RuntimeError("DATABASE_URL environment variable not set.")
     
     try:
         engine = get_db_engine(DATABASE_URL)
@@ -491,7 +492,7 @@ def process_reports_from_supabase(model_name="gemini-2.0-flash"):
             logging.info("Successfully connected to Supabase database.")
     except Exception as e:
         logging.error(f"CRITICAL: Failed to create SQLAlchemy engine or connect to Supabase: {e}")
-        return
+        raise RuntimeError("Failed to connect to Supabase for extraction.") from e
     
     # Get reports that need processing
     reports = get_reports_to_process(engine)
@@ -501,12 +502,41 @@ def process_reports_from_supabase(model_name="gemini-2.0-flash"):
     
     # Process each report
     processed_count = 0
+    failed_reports = []
     for report in reports:
-        success = process_single_report(report, model_name, engine)
+        try:
+            success = process_single_report(report, model_name, engine)
+        except Exception as exc:
+            reason = f"Unexpected extraction error: {exc}"
+            logging.error(
+                "Error processing report %s (Year: %s, Week: %s): %s",
+                report.get("id"),
+                report.get("year"),
+                report.get("week"),
+                exc,
+                exc_info=True,
+            )
+            _record_extraction_review(
+                report.get("id"),
+                report.get("year"),
+                report.get("week"),
+                report.get("enhanced_name"),
+                "extraction_exception",
+                reason,
+            )
+            success = False
+
         if success:
             processed_count += 1
+        else:
+            failed_reports.append(report)
     
     logging.info(f"Finished processing reports. Successfully processed: {processed_count}/{len(reports)}")
+    if failed_reports:
+        raise RuntimeError(
+            f"LLM extraction failed for {len(failed_reports)}/{len(reports)} reports. "
+            "See review_needed.jsonl for details."
+        )
 
 def main():
     """

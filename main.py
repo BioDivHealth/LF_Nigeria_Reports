@@ -305,6 +305,14 @@ def run_pipeline():
     for i, script in enumerate(scripts):
         script_name = script["name"]
         script_path = script["path"]
+
+        if script_name == "ExportData" and not pipeline_success:
+            note = "skipped because an upstream pipeline stage failed"
+            logging.warning(f"Skipping {script_name}: {note}.")
+            step_summaries.append(
+                PipelineStepSummary(i + 1, total_steps, script_name, "skipped", 0.0, note)
+            )
+            continue
         
         if not script_path.exists():
             logging.error(f"Script not found: {script_path}")
