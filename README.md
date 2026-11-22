@@ -96,6 +96,9 @@ Lassa_Reports_Scraping/
    SUPABASE_KEY=<your_key>
    ```
 
+The pipeline uses `psycopg2` for `postgresql://` database URLs. URLs that
+specify a driver explicitly retain that driver.
+
 ## Usage
 
 ### Run the Full Pipeline

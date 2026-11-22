@@ -34,7 +34,7 @@ import pandas as pd
 import requests
 from pathlib import Path
 from datetime import datetime
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 from urllib.parse import urlparse
 from dotenv import load_dotenv
 
@@ -45,10 +45,12 @@ sys.path.insert(0, str(project_root))
 # Load environment variables from .env file
 #load_dotenv(project_root / ".env")
 
-# Import centralized logging configuration
+# Import shared database and logging helpers
 try:
+    from utils.db_utils import get_db_engine
     from utils.logging_config import configure_logging
 except ImportError:
+    from src.utils.db_utils import get_db_engine
     from src.utils.logging_config import configure_logging
 
 # Configure logging
@@ -67,7 +69,7 @@ def connect_to_database():
         sys.exit(1)
     
     try:
-        engine = create_engine(database_url)
+        engine = get_db_engine(database_url)
         logging.info("Connected to database successfully")
         return engine
     except Exception as e:

@@ -12,6 +12,7 @@ import uuid
 from sqlalchemy import create_engine, text, MetaData, Table, Column
 from sqlalchemy import String, Integer, Float, Boolean
 from sqlalchemy.dialects.postgresql import insert, UUID
+from sqlalchemy.engine import make_url
 from sqlalchemy.exc import SQLAlchemyError, NoSuchTableError
 
 def get_db_engine(database_url):
@@ -19,12 +20,16 @@ def get_db_engine(database_url):
     Create and return a SQLAlchemy engine from a database URL.
     
     Args:
-        database_url (str): Database connection URL
+        database_url (str or URL): Database connection URL
         
     Returns:
         Engine: SQLAlchemy engine object
     """
-    return create_engine(database_url)
+    url = make_url(database_url)
+    if url.drivername == "postgresql":
+        # SQLAlchemy 2.1 defaults to psycopg 3, but the pipeline installs psycopg2.
+        url = url.set(drivername="postgresql+psycopg2")
+    return create_engine(url)
 
 def push_data_with_upsert(engine, df, table_name, conflict_cols, batch_size=500):
     """

@@ -16,7 +16,7 @@ import logging
 import uuid
 import numpy as np # For np.nan
 import pandas as pd
-from sqlalchemy import create_engine, text, MetaData, Table
+from sqlalchemy import text, MetaData, Table
 from sqlalchemy.dialects.postgresql import insert
 from pathlib import Path
 import time
@@ -25,14 +25,14 @@ from sqlalchemy.exc import SQLAlchemyError, NoSuchTableError
 try:
     from utils.artifact_paths import csv_name_for_report, extraction_qa_path_for_csv_path
     from utils.csv_qa import validate_extracted_csv
-    from utils.db_utils import push_data_with_upsert
+    from utils.db_utils import get_db_engine, push_data_with_upsert
     from utils.data_validation import add_uuid_column
     from utils.review_needed import record_review_needed
     from utils.status_qa import check_extraction_qa_file
 except ImportError:
     from src.utils.artifact_paths import csv_name_for_report, extraction_qa_path_for_csv_path
     from src.utils.csv_qa import validate_extracted_csv
-    from src.utils.db_utils import push_data_with_upsert
+    from src.utils.db_utils import get_db_engine, push_data_with_upsert
     from src.utils.data_validation import add_uuid_column
     from src.utils.review_needed import record_review_needed
     from src.utils.status_qa import check_extraction_qa_file
@@ -274,7 +274,7 @@ def push_lassa_data_individually(engine):
                 
                 # Create the table directly using SQLAlchemy's Table and Column objects
                 # This avoids pandas dtype issues with UUID
-                from sqlalchemy import Table, Column, MetaData, String, create_engine
+                from sqlalchemy import Table, Column, MetaData, String
                 from sqlalchemy.schema import CreateTable
                 
                 # Create a metadata instance
@@ -351,7 +351,7 @@ def main():
         return 1
     
     # Create engine with the DATABASE_URL
-    engine = create_engine(os.environ["DATABASE_URL"])
+    engine = get_db_engine(os.environ["DATABASE_URL"])
      
     # Push Lassa data individually, linking to website_data
     lassa_rows = push_lassa_data_individually(engine)
